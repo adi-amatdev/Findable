@@ -1,15 +1,12 @@
 services:
   api:
     build: .
-    # Reads FIRECRAWL_API_KEY, APP_PORT, etc. from your local .env
     env_file:
       - .env
     ports:
-      # host:container — host port follows APP_PORT, container is fixed at 8000
       - "${APP_PORT:-8000}:8000"
     environment:
       APP_PORT: 8000
-      # Talk to the redis service on the compose network (overrides .env).
       REDIS_URL: redis://redis:6379/0
     depends_on:
       redis:
@@ -24,9 +21,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    # RDB snapshots only (no AOF). Save if, within the window, >= N keys changed:
-    #   after 60s if >=1 change, after 300s if >=10 changes.
-    # Redis auto-loads /data/dump.rdb on startup, so the cache survives restarts.
     command: >
       redis-server
       --save 60 1
@@ -35,7 +29,6 @@ services:
       --dir /data
       --appendonly no
     volumes:
-      # Named volume persists the RDB file across `up`/`down` and reboots.
       - redis-data:/data
     restart: unless-stopped
     healthcheck:
@@ -44,5 +37,23 @@ services:
       timeout: 3s
       retries: 5
 
+  agents-api:
+    build: ./agents-seo-core
+    image: agents-seo-core:latest
+    env_file:
+      - .env
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - tranco-cache:/app/.tranco_cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
 volumes:
   redis-data:
+  tranco-cache:
