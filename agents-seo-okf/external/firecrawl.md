@@ -1,6 +1,7 @@
 ---
 type: External Dependency
 title: Firecrawl
+status: implemented
 description: Crawl service that returns rendered HTML, clean markdown, metadata, links, and a screenshot in one call; used for all deep-audit page fetches.
 tags: [external, crawl, firecrawl]
 timestamp: 2026-07-08T00:00:00Z

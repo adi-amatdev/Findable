@@ -1,6 +1,7 @@
 ---
 type: Infrastructure
 title: vLLM on ROCm
+status: planned
 description: Local model serving container running Gemma 4 E4B and 26B-A4B on AMD GPU via ROCm, with continuous batching for concurrent agent requests.
 tags: [inference, amd, rocm, vllm, gemma]
 timestamp: 2026-07-08T00:00:00Z

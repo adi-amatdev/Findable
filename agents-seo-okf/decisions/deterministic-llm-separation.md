@@ -2,6 +2,7 @@
 type: Decision
 title: Deterministic–LLM Separation
 description: All parsing happens in plain code producing SiteFacts; LLMs only judge on top of the facts — never parse. Makes audits fast, cheap, and reproducible.
+status: implemented
 tags: [decision, architecture, principle]
 timestamp: 2026-07-08T00:00:00Z
 ---

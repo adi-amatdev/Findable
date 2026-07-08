@@ -2,6 +2,7 @@
 type: Decision
 title: Parallel Inference on AMD
 description: One vLLM server handles concurrent agent requests via continuous batching — not N model copies — which is how real GPU parallelism works and what makes the AMD/Gemma story defensible.
+status: planned
 tags: [decision, architecture, principle, amd, vllm]
 timestamp: 2026-07-08T00:00:00Z
 ---

@@ -1,6 +1,7 @@
 ---
 type: Service
 title: PDF Export
+status: planned
 description: Playwright prints the Next.js dashboard HTML to PDF, producing a portable report from the same layout used in the browser.
 tags: [pdf, playwright, report]
 timestamp: 2026-07-08T00:00:00Z

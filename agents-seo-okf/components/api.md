@@ -1,27 +1,40 @@
 ---
 type: Service
 title: FastAPI Application Layer
-description: HTTP entrypoint that accepts audit requests, streams live per-agent status over SSE, and serves the final report and PDF.
+status: partial
+description: HTTP entrypoint. Today it exposes the URL→SiteFacts pipeline; the spec's audit/SSE/PDF routes are planned.
 tags: [backend, api, sse]
 timestamp: 2026-07-08T00:00:00Z
 ---
 
 # FastAPI Application Layer
 
-The FastAPI app is the single entrypoint for external callers. It exposes four routes:
+The FastAPI app is the single entrypoint for external callers.
+
+## Implemented routes (today)
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/audit` | Accepts `{ "url": "..." }`, starts an audit run, returns `{ "audit_id": "..." }`. |
-| `GET` | `/api/audit/{id}` | Returns the full [AuditReport](/data/audit-report.md) when the run is complete. |
-| `GET` | `/api/audit/{id}/events` | SSE stream of per-agent `started` / `finished` status events driving the dashboard spinners. |
-| `GET` | `/api/audit/{id}/report.pdf` | Playwright-rendered PDF of the dashboard. |
+| `POST` | `/api/sitefacts` | Accepts `{ "url": "..." }`, runs the pipeline, returns a [SiteFacts](/data/site-facts.md) object. `refresh: true` bypasses the [Cache](/components/cache.md). |
+| `POST` | `/scrape` | Raw [Firecrawl](/external/firecrawl.md) passthrough — debug utility. |
+| `GET` | `/health` | Liveness + Firecrawl/cache status. |
 
-On receiving `POST /api/audit` the app spawns an async run in the [Orchestrator](/components/orchestrator.md) and returns immediately; all further progress is delivered over SSE.
+Wired in `app/api/` (`routes.py`, `deps.py`); the pipeline dependency is
+overridable so tests inject an offline crawler.
 
-Live status events are emitted by the orchestrator through the app as each of the four [agents](/agents/) transitions state. This lets the [Frontend](/components/frontend.md) show real-time per-agent spinners without polling.
+## Planned routes (spec target, not built)
 
-**Implementation note.** SSE is served via `sse-starlette`. The app and orchestrator share an async event queue keyed by `audit_id`.
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/audit` | Start an async audit run, return `{ "audit_id": "..." }`. |
+| `GET` | `/api/audit/{id}` | The full [AuditReport](/data/audit-report.md) when complete. |
+| `GET` | `/api/audit/{id}/events` | SSE stream of per-agent `started`/`finished` events. |
+| `GET` | `/api/audit/{id}/report.pdf` | [PDF](/components/pdf-export.md) of the dashboard. |
+
+These depend on the [Orchestrator](/components/orchestrator.md), [agents](/agents/),
+and [Aggregator](/components/aggregator.md), none of which are built yet. When
+built, SSE is served via `sse-starlette` and the app + orchestrator share an
+async event queue keyed by `audit_id`.
 
 # Citations
 [1] [sse-starlette](https://github.com/sysid/sse-starlette)

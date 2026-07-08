@@ -1,6 +1,7 @@
 ---
 type: Service
 title: Aggregator
+status: planned
 description: Combines four AgentResults into the AI Readiness Score, sorts findings by impact/effort, and writes the executive summary via one LLM call.
 tags: [scoring, aggregation, report]
 timestamp: 2026-07-08T00:00:00Z

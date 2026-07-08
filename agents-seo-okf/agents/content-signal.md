@@ -1,6 +1,7 @@
 ---
 type: Agent
 title: Content Signal Agent (E-E-A-T)
+status: scaffold
 description: Scores the page's Experience, Expertise, Authoritativeness, and Trust signals; judges citation-worthiness and answer front-loading for AI search.
 tags: [agent, content, eeat, citation]
 timestamp: 2026-07-08T00:00:00Z

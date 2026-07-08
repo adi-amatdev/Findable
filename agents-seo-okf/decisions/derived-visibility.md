@@ -2,6 +2,7 @@
 type: Decision
 title: Derived Visibility Estimate (no retrieval simulation)
 description: The before/after visibility numbers are computed deterministically from SiteFacts signals, not measured via embedding/retrieval — locked for POC scope.
+status: planned
 tags: [decision, visibility, scope]
 timestamp: 2026-07-08T00:00:00Z
 ---

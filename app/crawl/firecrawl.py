@@ -1,4 +1,4 @@
-"""Thin async wrapper around the Firecrawl scrape API."""
+"""Thin async wrapper around the Firecrawl scrape API (rendered crawl)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import httpx
 
-from .config import Settings
+from ..config import Settings
 
 
 class FirecrawlError(RuntimeError):
@@ -56,7 +56,6 @@ class FirecrawlClient:
                 status_code=502,
                 payload=body,
             )
-        # v1/v2 wrap the useful bits under `data`; fall back to the whole body.
         if isinstance(body, dict) and "data" in body:
             return body["data"]
         return body if isinstance(body, dict) else {"raw": body}

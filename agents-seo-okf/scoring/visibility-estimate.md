@@ -1,6 +1,7 @@
 ---
 type: Metric
 title: Before/After Visibility Estimate
+status: planned
 description: Deterministic per-model visibility score (0–1) derived from SiteFacts signals, recomputed with blockers resolved to show the after-fixes projection.
 tags: [scoring, visibility, estimate]
 timestamp: 2026-07-08T00:00:00Z

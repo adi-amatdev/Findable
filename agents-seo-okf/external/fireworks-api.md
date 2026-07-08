@@ -1,6 +1,7 @@
 ---
 type: External Dependency
 title: Fireworks API
+status: planned
 description: Remote inference endpoint serving Gemma 4 31B for the two heaviest LLM roles — E-E-A-T judgment and executive summary writing.
 tags: [external, inference, fireworks, gemma]
 timestamp: 2026-07-08T00:00:00Z

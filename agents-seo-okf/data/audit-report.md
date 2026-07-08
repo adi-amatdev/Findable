@@ -1,6 +1,7 @@
 ---
 type: Data Contract
 title: AuditReport
+status: planned
 description: The final multi-page audit output — headline score, per-page deep results, site-wide coverage stats, before/after visibility, and an LLM-written executive summary.
 tags: [data, contract, report, output]
 timestamp: 2026-07-08T00:00:00Z

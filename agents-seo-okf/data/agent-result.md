@@ -1,6 +1,7 @@
 ---
 type: Data Contract
 title: AgentResult
+status: contract
 description: The JSON output every agent returns — a score, sub-scores, a list of findings with severity/effort/impact, and optional artifacts.
 tags: [data, contract, agent, findings]
 timestamp: 2026-07-08T00:00:00Z
@@ -46,3 +47,9 @@ The [Aggregator](/components/aggregator.md) sorts all findings across all agents
 - `S` — small (hours)
 - `M` — medium (days)
 - `L` — large (weeks/sprint)
+
+## Implementation status
+
+The contract is defined in code as a Pydantic model (`app/models/contracts.py`:
+`AgentResult`, `Finding`, `Effort`), ready for the scaffolded [agents](/agents/)
+to populate. No agent produces one yet.

@@ -10,3 +10,4 @@ description: Directory listing for progressive disclosure.
 - [deterministic-llm-separation](deterministic-llm-separation.md) -- All parsing happens in plain code producing SiteFacts; LLMs only judge on top of the facts — never parse. Makes audits fast, cheap, and reproducible.
 - [frontend-choice](frontend-choice.md) -- Open decision between Next.js (reference stack) and Native.Builder (team learning curve); the API contract is identical for both.
 - [parallel-inference-amd](parallel-inference-amd.md) -- One vLLM server handles concurrent agent requests via continuous batching — not N model copies — which is how real GPU parallelism works and what makes the AMD/Gemma story defensible.
+- [scope-sitefacts-first](scope-sitefacts-first.md) -- The first build target is the deterministic URL→SiteFacts pipeline; agents, scoring, and aggregation are scaffolded on top.

@@ -26,20 +26,39 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_reload: bool = True
     log_level: str = "info"
-    # Comma-separated list of allowed CORS origins, or "*" for all.
-    cors_origins: str = "*"
+    cors_origins: str = "*"  # comma-separated, or "*"
 
-    # --- Firecrawl ---
+    # --- Firecrawl (rendered crawl) ---
     firecrawl_api_key: str = ""
     firecrawl_api_url: str = "https://api.firecrawl.dev"
     firecrawl_api_version: str = "v2"
     firecrawl_timeout: float = 60.0
 
+    # --- Direct fetch (raw HTML, robots.txt, sitemap.xml, llms.txt) ---
+    fetch_timeout: float = 20.0
+    fetch_user_agent: str = "FindableBot/0.1 (+https://findable.ai)"
+
     # --- Redis cache ---
     redis_url: str = "redis://localhost:6379/0"
     cache_enabled: bool = True
-    # TTL for cached scrapes, in seconds. 0 = never expire (cache forever).
-    cache_ttl_seconds: int = 604800  # 7 days
+    cache_ttl_seconds: int = 604800  # 7 days; 0 = never expire
+
+    # --- LLM / Model Router ---
+    # Master switch. When false, agents run in deterministic heuristic mode
+    # (no external model calls) — the whole audit still runs end-to-end.
+    llm_enabled: bool = False
+    llm_timeout: float = 60.0
+    # Local vLLM (OpenAI-compatible). In docker-compose this points at the
+    # vllm service; leave blank to disable the local backend.
+    vllm_base_url: str = ""
+    vllm_api_key: str = "EMPTY"
+    # Remote Fireworks (OpenAI-compatible) for the two heaviest roles.
+    fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
+    fireworks_api_key: str = ""
+
+    # --- Orchestrator scope ---
+    max_deep_pages: int = 4    # follow-up pages that get the full 4-agent pass
+    max_shallow_pages: int = 50  # ceiling on the deterministic site crawl
 
     @property
     def cors_origin_list(self) -> list[str]:

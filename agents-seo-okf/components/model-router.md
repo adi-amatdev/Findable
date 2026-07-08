@@ -1,6 +1,7 @@
 ---
 type: Service
 title: Model Router
+status: scaffold
 description: Selects which model and endpoint to use for each LLM role, with ordered failover and response caching, behind a single OpenAI-compatible interface.
 tags: [inference, routing, failover]
 timestamp: 2026-07-08T00:00:00Z
@@ -29,3 +30,10 @@ Every caller in the system (four agents, orchestrator page-ranker, aggregator wr
 ## Failover policy
 
 Primary → Alt 1 → Alt 2 → Backup, triggered on timeout or error. Response caching at the router level avoids repeat calls for identical prompts (important for cache-keyed demo runs).
+
+## Implementation status
+
+Scaffolded in `app/llm/`. The full role→model failover table above is already
+encoded as data in `roles.py` (`Role` enum + `ROLE_ROUTES`); `router.py` defines
+the `ModelRouter.complete()` interface but raises `NotImplementedError` until a
+vLLM/Fireworks backend is wired and `LLM_ENABLED=true`.

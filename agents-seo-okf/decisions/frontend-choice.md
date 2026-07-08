@@ -2,6 +2,7 @@
 type: Decision
 title: Frontend Choice (Next.js vs Native.Builder)
 description: Open decision between Next.js (reference stack) and Native.Builder (team learning curve); the API contract is identical for both.
+status: planned
 tags: [decision, frontend, open]
 timestamp: 2026-07-08T00:00:00Z
 ---

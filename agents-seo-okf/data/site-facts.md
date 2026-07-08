@@ -1,6 +1,7 @@
 ---
 type: Data Contract
 title: SiteFacts
+status: implemented
 description: The deterministic, LLM-free snapshot of a single page — every signal the four agents read, produced once by the extraction pipeline.
 tags: [data, contract, extraction, sitefacts]
 timestamp: 2026-07-08T00:00:00Z
@@ -41,3 +42,14 @@ No LLM ever writes or modifies a SiteFacts object — only reads it.
 ## Key field — `js_dependency_ratio`
 
 `1 - raw_text_len / rendered_text_len`. Near 1.0 means content is JS-gated. This is the highest-signal, most demoable finding in the whole system and drives a [hard gate](/scoring/ai-readiness-score.md) in the score.
+
+## Implementation status
+
+Defined as Pydantic models in `app/models/contracts.py` (`SiteFacts` + sub-models)
+and produced by [Deterministic Extraction](/components/extraction.md). Every field
+is populated by the [pipeline](/components/pipeline.md). Field-level notes:
+
+- `structured_data` — JSON-LD only (`extruct` Microdata/RDFa deferred).
+- `entities_raw` — capitalized-phrase heuristic, `label` always `MISC` (spaCy deferred).
+- `llms_txt.full_variant` — always `false` (llms-full.txt is not fetched).
+- `links.outbound_citations` — proxied by the external-link count.

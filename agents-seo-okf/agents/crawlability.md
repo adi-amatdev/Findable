@@ -1,6 +1,7 @@
 ---
 type: Agent
 title: Crawlability and Access Agent
+status: scaffold
 description: Judges how much content is blocked or invisible to AI crawlers — robots.txt restrictions, JS-gated content, sitemap gaps — and produces plain-language fixes.
 tags: [agent, crawlability, robots, js]
 timestamp: 2026-07-08T00:00:00Z

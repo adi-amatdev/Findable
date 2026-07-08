@@ -1,6 +1,7 @@
 ---
 type: Agent
 title: Structured Data Agent
+status: scaffold
 description: Judges whether an AI can extract key facts from the page's schema.org markup, llms.txt, and meta tags, and identifies missing or mismatched schema.
 tags: [agent, structured-data, schema, jsonld, llmstxt]
 timestamp: 2026-07-08T00:00:00Z

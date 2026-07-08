@@ -1,9 +1,8 @@
-"""Redis cache for Firecrawl scrape results.
+"""Redis cache. Check-first, graceful degradation on any Redis error.
 
-We cache the *raw* Firecrawl `data` object keyed by a hash of (url, options),
-so `/scrape` and `/audit` share entries and re-running an audit never re-scrapes.
-All Redis errors degrade gracefully to a cache miss/no-op — a Redis outage
-slows things down (re-scrape) but never breaks the API.
+We cache the raw crawl (RawCrawl) keyed by a hash of the URL, so re-runs and
+demo runs never re-fetch and never waste Firecrawl credits. A Redis outage
+degrades to a cache miss / no-op — it never breaks the pipeline.
 """
 
 from __future__ import annotations
@@ -16,20 +15,16 @@ from typing import Any, Optional
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
-from .config import Settings, get_settings
+from ..config import Settings, get_settings
 
-KEY_PREFIX = "firecrawl:scrape:"
+KEY_PREFIX = "findable:crawl:"
 
 
-def make_key(url: str, options: dict[str, Any]) -> str:
-    """Stable cache key from the exact request that would hit Firecrawl."""
-    payload = json.dumps(
-        {"url": url, "options": options},
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+def make_key(url: str, namespace: str = "crawl", extra: Any = None) -> str:
+    """Stable cache key from the URL (and optional extra discriminator)."""
+    payload = json.dumps({"url": url, "extra": extra}, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-    return f"{KEY_PREFIX}{digest}"
+    return f"findable:{namespace}:{digest}"
 
 
 class Cache:
@@ -45,10 +40,7 @@ class Cache:
         if not self.enabled:
             return None
         if self._client is None:
-            self._client = redis.from_url(
-                self._settings.redis_url,
-                decode_responses=True,
-            )
+            self._client = redis.from_url(self._settings.redis_url, decode_responses=True)
         return self._client
 
     async def get(self, key: str) -> Optional[dict]:

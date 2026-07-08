@@ -1,6 +1,7 @@
 ---
 type: Service
 title: Orchestrator
+status: planned
 description: asyncio-based coordinator that drives the full audit lifecycle — crawl, extraction, agent fan-out, aggregation — and emits live status events.
 tags: [backend, asyncio, orchestration]
 timestamp: 2026-07-08T00:00:00Z

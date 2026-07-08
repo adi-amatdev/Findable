@@ -1,6 +1,7 @@
 ---
 type: Service
 title: Next.js Frontend
+status: planned
 description: React dashboard showing the score card, category radar, knowledge-graph view, prioritized fix list, and live per-agent status spinners.
 tags: [frontend, nextjs, react, sse]
 timestamp: 2026-07-08T00:00:00Z

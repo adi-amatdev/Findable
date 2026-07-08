@@ -1,6 +1,7 @@
 ---
 type: Metric
 title: AI Readiness Score
+status: planned
 description: Deterministic 0–100 score combining four agent sub-scores with fixed weights and hard gates that cap the overall score on critical failures.
 tags: [scoring, metric, rubric]
 timestamp: 2026-07-08T00:00:00Z

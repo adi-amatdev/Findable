@@ -1,6 +1,7 @@
 ---
 type: Agent
 title: Entity and Topic Agent
+status: scaffold
 description: Maps the page's topic-to-entity graph, judges entity disambiguation (sameAs/Wikidata), and assesses topical authority via the internal link graph.
 tags: [agent, entity, topic, knowledge-graph, ner]
 timestamp: 2026-07-08T00:00:00Z
