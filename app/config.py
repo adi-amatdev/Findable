@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
     fireworks_api_key: str = ""
 
+    # --- Agents SEO Core (inference layer) ---
+    # URL of the agents-api service. In docker-compose this is http://agents-api:8080.
+    # Leave blank to disable forwarding (sitefacts-only mode).
+    agents_url: str = "http://localhost:8080"
+
     # --- Orchestrator scope ---
     max_deep_pages: int = 4    # follow-up pages that get the full 4-agent pass
     max_shallow_pages: int = 50  # ceiling on the deterministic site crawl

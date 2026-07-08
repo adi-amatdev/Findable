@@ -2,12 +2,14 @@
 
 Implemented:
 - POST /api/sitefacts  — the URL -> SiteFacts pipeline (the deliverable).
+- POST /api/audit      — SiteFacts pipeline + forward to agents-api for full audit.
 - POST /scrape         — raw Firecrawl passthrough (debug utility).
 - GET  /health, GET /  — meta.
 """
 
 from __future__ import annotations
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..cache import Cache, get_cache
@@ -62,6 +64,38 @@ async def sitefacts(
         return await pipeline.run(str(req.url), refresh=req.refresh)
     except FirecrawlError as err:
         _raise_firecrawl(err)
+
+
+@router.post("/api/audit", tags=["pipeline"])
+async def audit(
+    req: SiteFactsRequest,
+    pipeline: SiteFactsPipeline = Depends(get_pipeline),
+    settings: Settings = Depends(get_settings),
+):
+    """Crawl URL -> SiteFacts -> agents-api for full AI readiness audit."""
+    if not settings.agents_url:
+        raise HTTPException(status_code=503, detail="AGENTS_URL not configured")
+    try:
+        sf = await pipeline.run(str(req.url), refresh=req.refresh)
+    except FirecrawlError as err:
+        _raise_firecrawl(err)
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                f"{settings.agents_url.rstrip('/')}/audit",
+                content=sf.model_dump_json(),
+                headers={"Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"agents-api returned {exc.response.status_code}: {exc.response.text[:200]}",
+        )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach agents-api: {exc}")
 
 
 @router.post("/scrape", tags=["debug"])

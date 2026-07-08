@@ -1,9 +1,9 @@
 ---
-title: agents-seo-okf
+title: okf
 description: Directory listing for progressive disclosure.
 ---
 
-# agents-seo-okf
+# okf
 
 ## Subdirectories
 - [agents/](agents/index.md)

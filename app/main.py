@@ -27,7 +27,7 @@ app = FastAPI(
         "URL in, SiteFacts out. A URL is crawled (Firecrawl rendered + direct "
         "fetch of raw HTML / robots.txt / sitemap.xml / llms.txt) and parsed "
         "deterministically into a SiteFacts snapshot. Downstream agent, scoring, "
-        "and aggregation layers are scaffolded (see agents-seo-okf/)."
+        "and aggregation layers are scaffolded (see okf/)."
     ),
     lifespan=lifespan,
 )

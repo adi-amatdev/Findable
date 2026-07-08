@@ -1,4 +1,4 @@
-"""Canonical data contracts (see agents-seo-okf/data/).
+"""Canonical data contracts (see okf/data/).
 
 Only `SiteFacts` (and its sub-models) is produced by the implemented pipeline.
 `AgentResult` and `AuditReport` are defined here as the target contracts the
@@ -24,7 +24,7 @@ AI_BOTS: tuple[str, ...] = (
 
 
 # ─────────────────────────── SiteFacts (IMPLEMENTED) ───────────────────────────
-# Mirrors agents-seo-okf/data/site-facts.md. Produced once per URL by
+# Mirrors okf/data/site-facts.md. Produced once per URL by
 # deterministic extraction; no LLM ever writes it.
 
 
@@ -130,7 +130,7 @@ class SiteFacts(BaseModel):
 
 # ─────────────────── Downstream contracts (SCAFFOLD targets, not built) ───────────────────
 # Defined so the scaffolded agent/aggregation packages have a typed interface to
-# code against. See agents-seo-okf/data/agent-result.md and audit-report.md.
+# code against. See okf/data/agent-result.md and audit-report.md.
 
 
 class Effort(str, Enum):

@@ -1,6 +1,6 @@
-# Backend validation against `agents-seo-okf/`
+# Backend validation against `okf/`
 
-Validates the current backend against the architecture spec in `agents-seo-okf/`
+Validates the current backend against the architecture spec in `okf/`
 (OKF bundle: 9 components, 4 agents, 3 data contracts, 2 scoring metrics, 2
 external deps, 4 decisions).
 
@@ -37,7 +37,7 @@ the implemented base without rework.
 
 ## `SiteFacts` contract conformance
 
-Every field in `agents-seo-okf/data/site-facts.md` is produced:
+Every field in `okf/data/site-facts.md` is produced:
 
 | Field | Status | Notes |
 |---|---|---|

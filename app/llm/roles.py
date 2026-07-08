@@ -1,6 +1,6 @@
 """LLM roles and their ordered failover routes (reference data).
 
-Transcribed from agents-seo-okf/components/model-router.md. Each role has an
+Transcribed from okf/components/model-router.md. Each role has an
 ordered chain: primary -> alt1 -> alt2 -> backup. `backend` is "local" (vLLM on
 ROCm) or "fireworks" (remote). This is config only — no call logic here.
 """

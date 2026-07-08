@@ -1,7 +1,7 @@
 """Agent layer — SCAFFOLD (not implemented).
 
 The four concurrent agents each take SiteFacts (+ the page markdown slice) and
-return an AgentResult (see agents-seo-okf/agents/). They are the next layer to
+return an AgentResult (see okf/agents/). They are the next layer to
 build on top of the implemented SiteFacts pipeline:
 
 - crawlability     (30% of score) — robots / JS-gating / sitemap blockers

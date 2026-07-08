@@ -11,7 +11,7 @@ class BaseAgent(ABC):
     """Contract every agent implements: SiteFacts in, AgentResult out.
 
     Subclasses set `name` (matches AgentResult.agent) and `weight` (its share of
-    the AI Readiness Score). See agents-seo-okf/data/agent-result.md.
+    the AI Readiness Score). See okf/data/agent-result.md.
     """
 
     name: str = ""
@@ -22,6 +22,6 @@ class BaseAgent(ABC):
         """Judge the facts (+ facts.markdown) and return an AgentResult.
 
         NOT IMPLEMENTED — this is the next layer to build. See the per-agent
-        specs under agents-seo-okf/agents/.
+        specs under okf/agents/.
         """
         raise NotImplementedError

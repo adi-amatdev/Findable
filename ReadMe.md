@@ -58,7 +58,7 @@ FastAPI · Firecrawl · httpx · BeautifulSoup/lxml · Redis · uv · Docker
 
 - **[USAGE.md](USAGE.md)** — how to run, test, and curl the API
 - **[VALIDATION.md](VALIDATION.md)** — how this maps to the architecture spec
-- **[agents-seo-okf/](agents-seo-okf/index.md)** — the full system architecture
+- **[okf/](okf/index.md)** — the full system architecture
 
 ## Status
 

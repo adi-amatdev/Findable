@@ -26,5 +26,5 @@ class ModelRouter:
     async def complete(self, role: Role, messages: list[dict], **kwargs) -> str:
         raise NotImplementedError(
             "ModelRouter is scaffolded. Wire vLLM/Fireworks and set LLM_ENABLED=true "
-            "to enable. See agents-seo-okf/components/model-router.md."
+            "to enable. See okf/components/model-router.md."
         )
