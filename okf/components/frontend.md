@@ -1,30 +1,47 @@
 ---
 type: Service
 title: Next.js Frontend
-status: planned
-description: React dashboard showing the score card, category radar, knowledge-graph view, prioritized fix list, and live per-agent status spinners.
-tags: [frontend, nextjs, react, sse]
+status: partial
+description: Minimal Next.js dashboard — story hero, four streaming agent columns with skeletons, and a report file-chip that opens a split pane with markdown/PDF export.
+tags: [frontend, nextjs, react, sse, animejs]
 timestamp: 2026-07-08T00:00:00Z
 ---
 
 # Next.js Frontend
 
-Serves the audit dashboard. Communicates with the [FastAPI layer](/components/api.md) over its four routes.
+Lives in `frontend/`. Minimal, space-efficient single page (plain CSS + anime.js
+for motion; no chart/CSS frameworks). Communicates with the
+[FastAPI layer](/components/api.md).
 
-## Dashboard panels
+## Flow (as built)
 
-- **Score card** — hero AI Readiness Score (landing-page number).
-- **Category radar** — Recharts radar chart of the four sub-scores (crawlability, content, structured data, entity/topic).
-- **Knowledge-graph view** — react-flow visualization of the entity graph returned by the [Entity & Topic agent](/agents/entity-topic.md).
-- **Prioritized fix list** — findings sorted by impact ÷ effort, each with a severity badge, effort estimate, and link to an authoritative reference.
-- **Per-agent status spinners** — driven by SSE events from `/api/audit/{id}/events`; one spinner per agent, shows `started` → `finished` in real time.
-- **Site-health panel** — coverage stats (`has_schema_pct`, `js_rendered_pct`, `meta_desc_pct`, `author_date_pct`) and systemic recommendations from the Tier-3 shallow pass.
-- **PDF export button** — triggers `GET /api/audit/{id}/report.pdf`.
+1. **Story hero** — centered URL form plus a four-beat narrative
+   (Crawl → Facts → Judge → Report) explaining the product; hero compresses via
+   animated transition once an audit starts.
+2. **Facts strip** — `POST /api/sitefacts` result compressed to one dense line
+   (HTTP, blocked AI bots, JS-gated %, schema types, words, llms.txt).
+3. **Four agent columns** — one per [agent](/agents/), each with a shimmering
+   skeleton until its stream produces tokens. Each column subscribes to
+   **`GET /agent/stream/{agent_id}`** (SSE). Events tolerated: plain-text tokens,
+   `{type: token|status|result|done}` JSON. Endpoint is not live yet; columns
+   degrade to an honest "stream offline" state.
+4. **Report chip** — when all four agents settle, the columns collapse
+   (anime.js stagger) into a Claude-style file bar. Clicking opens a **split
+   pane** rendering the aggregated markdown report, with **↓ .md** and **↓ PDF**
+   (print-pipeline) export.
 
-## Rendering surface
+## Deviations from the original spec
 
-The same layout is used for both the browser dashboard and the [PDF Export](/components/pdf-export.md) — Playwright prints the dashboard HTML, so there is one layout, two surfaces.
+- Per-agent **streaming text columns with skeletons** replace the spinner list;
+  stream path is `/agent/stream/{agent_id}` rather than `/api/audit/{id}/events`.
+- Score card / radar / knowledge-graph panels are deferred until the
+  [Aggregator](/components/aggregator.md) returns a real
+  [AuditReport](/data/audit-report.md); the report currently renders as markdown
+  composed client-side from SiteFacts + streamed judgments.
+- PDF export is client-side print for now; `GET /api/audit/{id}/report.pdf`
+  ([PDF Export](/components/pdf-export.md)) remains the target.
 
 ## Frontend choice decision
 
-The architecture notes this was an open decision (Next.js vs Native.Builder); Next.js is the reference stack used here. See [Frontend Choice](/decisions/frontend-choice.md).
+Next.js (App Router, pinned 13.5 for Node 16). See
+[Frontend Choice](/decisions/frontend-choice.md).
