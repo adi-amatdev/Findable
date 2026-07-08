@@ -47,6 +47,10 @@ The FastAPI app is the single entrypoint for external callers. Wired in `app/api
 5. Caller subscribes to `GET /agent/stream/{agent_id}` for each agent.
 6. Caller polls `GET /api/audit/{audit_id}` for the final report.
 
+## Mock stream mode (`MOCK_STREAM=true`)
+
+When `MOCK_STREAM=true` is set, the three streaming routes (`/api/audit/start`, `/agent/stream/{agent_id}`, `/api/audit/{audit_id}`) branch into a zero-cost passthrough: Firecrawl and agents-api are skipped entirely, static fixtures are used, and SSE events are emitted on a realistic schedule from an in-process background task. All other routes remain on the real path. See [Mock Stream Passthrough](/components/mock-stream.md) for full details.
+
 ## Blocking flow (`POST /api/audit`)
 
 Legacy/direct path: backend crawls, forwards SiteFacts JSON to `{AGENTS_URL}/audit` with a 120 s timeout, returns the full AuditReport synchronously. No streaming. Unchanged from the previous version.
