@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import anime from "animejs";
-
-// The Claude-style artifact chip: the finished report collapses into a
-// file bar; clicking it opens a split pane with the report + download actions.
+import { animate } from "animejs";
 
 export default function ReportBar({
   filename,
@@ -17,28 +14,24 @@ export default function ReportBar({
   const chipRef = useRef<HTMLButtonElement>(null);
   const paneRef = useRef<HTMLDivElement>(null);
 
-  // Chip lands with a soft drop-in.
   useEffect(() => {
     if (chipRef.current) {
-      anime({
-        targets: chipRef.current,
+      animate(chipRef.current, {
         translateY: [24, 0],
         opacity: [0, 1],
         scale: [0.92, 1],
         duration: 650,
-        easing: "spring(1, 80, 12, 0)",
+        ease: "spring(1, 80, 12, 0)",
       });
     }
   }, []);
 
-  // Split pane slides open / closed.
   useEffect(() => {
     if (paneRef.current) {
-      anime({
-        targets: paneRef.current,
+      animate(paneRef.current, {
         translateX: open ? ["100%", "0%"] : ["0%", "100%"],
         duration: 480,
-        easing: "cubicBezier(0.22, 1, 0.36, 1)",
+        ease: "cubicBezier(0.22, 1, 0.36, 1)",
       });
     }
   }, [open]);
@@ -52,7 +45,6 @@ export default function ReportBar({
     URL.revokeObjectURL(a.href);
   }
 
-  // PDF via the browser's print pipeline: print styles isolate the report pane.
   function downloadPdf() {
     document.body.classList.add("printing-report");
     window.print();

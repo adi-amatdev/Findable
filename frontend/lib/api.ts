@@ -18,7 +18,8 @@ export class ApiError extends Error {
 
 export async function getSiteFacts(
   url: string,
-  refresh = false
+  refresh = false,
+  signal?: AbortSignal
 ): Promise<SiteFacts> {
   let res: Response;
   try {
@@ -26,6 +27,7 @@ export async function getSiteFacts(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, refresh }),
+      signal,
     });
   } catch {
     throw new ApiError(0, `Can't reach the backend at ${API_BASE}. Is it running?`);

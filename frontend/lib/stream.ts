@@ -1,13 +1,14 @@
-// SSE client for the (future) per-agent stream:
-//   GET {API_BASE}/agent/stream/{agent_id}
+// SSE client for per-agent streams.
+// Connects to: {apiBase}/agent/stream/{agentId}
+// which the main API (FastAPI) proxies to the agents-api.
 //
-// Event contract (tolerant by design — the backend lands later):
+// Event contract (tolerant by design):
 //   - plain text data            -> treated as a token chunk
 //   - {"type":"token","text"}    -> token chunk
 //   - {"type":"status", ...}     -> lifecycle ("started" | "finished")
-//   - {"type":"result", ...}     -> final AgentResult JSON (okf/data/agent-result.md)
+//   - {"type":"result", ...}     -> final AgentResult JSON
 //   - {"type":"done"}            -> stream complete
-// Connection errors surface as `offline` so the UI can say so honestly.
+// Connection errors surface as `offline`.
 
 export interface StreamHandlers {
   onToken: (text: string) => void;
@@ -47,8 +48,6 @@ export function openAgentStream(
 
   es.onerror = () => {
     if (closed) return;
-    // EventSource fires error both for "endpoint missing" and transient drops.
-    // readyState CLOSED means it gave up — report offline instead of spinning.
     if (es.readyState === EventSource.CLOSED) {
       h.onOffline("Agent stream is not live yet — the backend endpoint ships soon.");
       close();

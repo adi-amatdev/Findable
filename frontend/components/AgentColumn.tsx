@@ -27,7 +27,6 @@ export default function AgentColumn({
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // Follow the stream as it grows.
   useEffect(() => {
     const el = bodyRef.current;
     if (el) el.scrollTop = el.scrollHeight;
