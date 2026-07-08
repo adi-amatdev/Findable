@@ -1,9 +1,9 @@
 ---
 type: Service
 title: FastAPI Application Layer
-status: partial
-description: HTTP entrypoint. Exposes the SiteFacts pipeline and the integrated audit bridge to agents-api; SSE/PDF routes remain planned.
-tags: [backend, api, sse, integration]
+status: implemented
+description: HTTP entrypoint. Exposes the SiteFacts pipeline, the integrated audit bridge, and the SSE agent-streaming routes. PDF export remains planned.
+tags: [backend, api, sse, integration, streaming]
 timestamp: 2026-07-08T00:00:00Z
 ---
 
@@ -13,30 +13,50 @@ The FastAPI app is the single entrypoint for external callers. Wired in `app/api
 
 ## Implemented routes
 
+### Backend (`app/api/routes.py`)
+
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/api/sitefacts` | Accepts `{ "url": "..." }`, runs the pipeline, returns a [SiteFacts](/data/site-facts.md) object. `refresh: true` bypasses the [Cache](/components/cache.md). |
-| `POST` | `/api/audit` | Crawls URL → SiteFacts → forwards to the [agents-api service](/components/aggregator.md) via `AGENTS_URL`, returns a full [AuditReport](/data/audit-report.md). SiteFacts is served from Cache on repeated calls so no re-crawl cost. |
+| `POST` | `/api/audit` | Crawls URL → SiteFacts → forwards to agents-api (`POST /audit`), returns full [AuditReport](/data/audit-report.md). Blocking. |
+| `POST` | `/api/audit/start` | Async variant: crawls URL → SiteFacts → fires agents in background. Returns `{audit_id, agent_ids}` immediately so the client can subscribe to SSE streams. |
+| `GET`  | `/agent/stream/{agent_id}` | SSE proxy — transparently forwards the agents-api stream for one agent to the browser. See [Streaming](/components/streaming.md). |
+| `GET`  | `/api/audit/{audit_id}` | Poll proxy — returns `AuditReport` or `202 {"status":"running"}` while agents are still running. |
 | `POST` | `/scrape` | Raw [Firecrawl](/external/firecrawl.md) passthrough — debug utility. |
-| `GET` | `/health` | Liveness + Firecrawl/cache status. |
+| `GET`  | `/health` | Liveness + Firecrawl/cache status. |
 
-## Integration bridge — `POST /api/audit`
-
-`AGENTS_URL` in the backend config points at the agents-api service (`http://agents-api:8080` in docker-compose, `http://localhost:8080` in local dev). The route:
-
-1. Calls `SiteFactsPipeline.run(url)` — served from Redis cache if already crawled.
-2. POSTs the SiteFacts JSON (`sf.model_dump_json()`) to `{AGENTS_URL}/audit` via httpx with a 120 s timeout.
-3. Returns the AuditReport from agents-api directly to the caller.
-
-Errors from agents-api surface as HTTP 502. If `AGENTS_URL` is blank the route returns 503.
-
-## Planned routes (spec target, not built)
+### Agents-api (`agents/app/main.py`)
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/audit/{id}` | Persisted AuditReport by ID (requires async job store). |
-| `GET` | `/api/audit/{id}/events` | SSE stream of per-agent events. |
+| `POST` | `/audit` | Blocking: run 4 agents + aggregator, return AuditReport. |
+| `POST` | `/audit/start` | Async: accept `AuditStartRequest` (SiteFacts + audit_id + agent_ids), start background task, return immediately. |
+| `GET`  | `/agent/stream/{agent_id}` | SSE stream of [AgentStatusEvents](/data/agent-status-event.md) for one agent. Closes when agent emits its sentinel. |
+| `GET`  | `/audit/{audit_id}/result` | Returns AuditReport or `202` while still running. |
+| `POST` | `/audit/batch` | Run pipeline on up to 10 SiteFacts, one AuditReport each. |
+| `GET`  | `/health` | Liveness. |
+
+## Streaming flow (`POST /api/audit/start`)
+
+`AGENTS_URL` in the backend config points at the agents-api service. The async audit flow:
+
+1. `SiteFactsPipeline.run(url)` — served from Redis cache if already crawled.
+2. Backend generates `audit_id` (UUID) + 4 `agent_ids` (one UUID per agent).
+3. POSTs `AuditStartRequest` (`{sitefacts, audit_id, agent_ids}`) to `{AGENTS_URL}/audit/start` with a 10 s timeout. Agents-api starts a background task and returns immediately.
+4. Backend returns `{audit_id, agent_ids}` to the caller.
+5. Caller subscribes to `GET /agent/stream/{agent_id}` for each agent.
+6. Caller polls `GET /api/audit/{audit_id}` for the final report.
+
+## Blocking flow (`POST /api/audit`)
+
+Legacy/direct path: backend crawls, forwards SiteFacts JSON to `{AGENTS_URL}/audit` with a 120 s timeout, returns the full AuditReport synchronously. No streaming. Unchanged from the previous version.
+
+## Planned
+
+| Method | Path | Purpose |
+|---|---|---|
 | `GET` | `/api/audit/{id}/report.pdf` | [PDF export](/components/pdf-export.md). |
 
 # Citations
-[1] [sse-starlette](https://github.com/sysid/sse-starlette)
+[1] [FastAPI StreamingResponse](https://fastapi.tiangolo.com/advanced/custom-response/#streamingresponse)
+[2] [SSE specification (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)
