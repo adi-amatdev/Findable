@@ -1,0 +1,48 @@
+services:
+  api:
+    build: .
+    # Reads FIRECRAWL_API_KEY, APP_PORT, etc. from your local .env
+    env_file:
+      - .env
+    ports:
+      # host:container — host port follows APP_PORT, container is fixed at 8000
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_PORT: 8000
+      # Talk to the redis service on the compose network (overrides .env).
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    # RDB snapshots only (no AOF). Save if, within the window, >= N keys changed:
+    #   after 60s if >=1 change, after 300s if >=10 changes.
+    # Redis auto-loads /data/dump.rdb on startup, so the cache survives restarts.
+    command: >
+      redis-server
+      --save 60 1
+      --save 300 10
+      --dbfilename dump.rdb
+      --dir /data
+      --appendonly no
+    volumes:
+      # Named volume persists the RDB file across `up`/`down` and reboots.
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis-data:
