@@ -1,0 +1,56 @@
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+# 1. Local-only (Ollama on host, no remote vLLM):
+#      docker compose up
+#
+# 2. Ollama (light) + remote vLLM (heavy) via tunnel:
+#      VLLM_URL=https://abc123.ngrok.io docker compose up
+#
+# 3. Full prod (vLLM + Fireworks fallback):
+#      VLLM_URL=https://abc123.ngrok.io FIREWORKS_KEY=fw_... docker compose up
+#
+# Copy .env.example to .env and fill in values, then:
+#      docker compose --env-file .env up
+# ---------------------------------------------------------------------------
+
+services:
+  agents-api:
+    build: .
+    image: agents-seo-core:latest
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      # ---- Ollama (light models, always runs on host machine) ----
+      OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
+      LOCAL_LIGHT_MODEL: "${LOCAL_LIGHT_MODEL:-gemma4:e2b}"
+
+      # ---- Remote vLLM (heavy models via ngrok/cloudflared tunnel) ----
+      # Leave VLLM_URL empty to fall back to Ollama for all roles
+      VLLM_URL: "${VLLM_URL:-}"
+      LOCAL_HEAVY_MODEL: "${LOCAL_HEAVY_MODEL:-google/gemma-4-27b-it}"
+      LOCAL_MID_MODEL: "${LOCAL_MID_MODEL:-Qwen/Qwen3-14B}"
+
+      # ---- Fireworks (cloud fallback, optional) ----
+      FIREWORKS_KEY: "${FIREWORKS_KEY:-}"
+
+      # ---- Local-only mode (set to 1 to skip all Fireworks calls) ----
+      LOCAL_ONLY: "${LOCAL_ONLY:-0}"
+
+    volumes:
+      # Persist Tranco list cache across restarts (saves ~5s on first request)
+      - tranco-cache:/app/.tranco_cache
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  tranco-cache:
