@@ -26,6 +26,30 @@ POST /api/sitefacts {url}
 Results are cached in Redis by URL hash, so re-runs never re-crawl (no wasted
 Firecrawl credits).
 
+## Generate & inspect a SiteFacts object
+
+**Where it's built:** `POST /api/sitefacts` → `SiteFactsPipeline.run()`
+(`app/pipeline.py`) → `CrawlFetcher.crawl()` (`app/crawl/fetcher.py`, returns a
+cached `RawCrawl`) → **`build_site_facts()`** (`app/extraction/extractor.py`) — the
+deterministic parse that produces the object.
+
+**Try it** (server running, `FIRECRAWL_API_KEY` set):
+
+```bash
+curl -sX POST http://localhost:8000/api/sitefacts \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.firecrawl.dev"}' | jq
+```
+
+Add `"refresh": true` to bypass the cache and re-crawl. No `jq`? Drop `| jq`.
+
+**Is it deterministic?** The parse (`build_site_facts`) is a pure function — the
+same crawled HTML always yields the same `SiteFacts` (there's a test for it).
+Across fresh crawls only two fields move: `fetched_at` and `http.latency_ms` (plus
+the page's own content if it changed). Each crawl is cached in Redis by URL hash,
+so repeat calls return a **byte-identical** object until you pass `refresh: true`
+(or the 7-day TTL lapses).
+
 ## Built on
 
 FastAPI · Firecrawl · httpx · BeautifulSoup/lxml · Redis · uv · Docker

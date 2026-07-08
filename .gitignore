@@ -18,3 +18,4 @@ venv/
 .vscode/
 
 okf.skill
+dry-run.log
