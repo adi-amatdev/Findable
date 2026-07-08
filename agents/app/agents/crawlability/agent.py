@@ -8,7 +8,8 @@ from pathlib import Path
 
 from app.agents.crawlability.sub_agent import run_sub_agent
 from app.models.router import router
-from app.schemas import AgentResult, CrawlReport, Finding, SiteFacts, TrafficSignal
+from app.schemas import AgentResult, AgentStatusEvent, CrawlReport, Finding, SiteFacts, TrafficSignal
+import app.state as state
 
 log = logging.getLogger(__name__)
 
@@ -99,12 +100,21 @@ def _build_judgment_prompt(
     )
 
 
-async def run_crawlability_agent(sitefacts: SiteFacts) -> AgentResult:
+async def run_crawlability_agent(sitefacts: SiteFacts, agent_id: str | None = None) -> AgentResult:
+    async def _emit(phase: str, detail: str | None = None, score: int | None = None) -> None:
+        if agent_id:
+            await state.emit(agent_id, AgentStatusEvent(
+                agent_id=agent_id, agent="crawlability",
+                phase=phase, detail=detail, score=score,
+            ))
+
+    await _emit("started")
     t0 = time.monotonic()
 
+    await _emit("sub_agent_pass_1", detail="seed crawl")
     # Run sub-agent (3-pass crawl) and traffic estimation concurrently
     crawl_reports, traffic_signal = await asyncio.gather(
-        run_sub_agent(sitefacts, max_depth=3),
+        run_sub_agent(sitefacts, max_depth=3, emit_fn=_emit),
         _get_tranco_traffic(sitefacts.url),
         return_exceptions=True,
     )
@@ -130,6 +140,7 @@ async def run_crawlability_agent(sitefacts: SiteFacts) -> AgentResult:
         {"role": "user", "content": prompt},
     ]
 
+    await _emit("judgment_call", detail="crawlability_judgment")
     response = await router.call_with_fallback(
         "crawlability_judgment",
         messages=messages,
@@ -158,9 +169,12 @@ async def run_crawlability_agent(sitefacts: SiteFacts) -> AgentResult:
     all_blocked = not any(sitefacts.robots.allows.model_dump(by_alias=True).values())
     if all_blocked:
         score = min(score, 10)
+        await _emit("applying_hard_gates", detail="all AI bots blocked → score capped at 10")
     elif not sitefacts.render.content_visible_without_js:
         score = min(score, 25)
+        await _emit("applying_hard_gates", detail="JS-gated content → score capped at 25")
 
+    await _emit("complete", score=score)
     return AgentResult(
         agent="crawlability",
         score=score,

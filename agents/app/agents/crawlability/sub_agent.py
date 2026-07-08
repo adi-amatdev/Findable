@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable, Coroutine
+from typing import Any
 from urllib.parse import urlparse
 
 from app.agents.crawlability.tools import (
@@ -253,23 +255,37 @@ async def _pass3(
 # Public entry point
 # ---------------------------------------------------------------------------
 
-async def run_sub_agent(sitefacts: SiteFacts, max_depth: int = 3) -> list[CrawlReport]:
+EmitFn = Callable[..., Coroutine[Any, Any, None]]
+
+
+async def run_sub_agent(
+    sitefacts: SiteFacts,
+    max_depth: int = 3,
+    emit_fn: EmitFn | None = None,
+) -> list[CrawlReport]:
     """
     Run the 3-pass deterministic crawl sub-agent.
 
     Returns up to max_depth CrawlReports.
+    emit_fn is called at the start of passes 2 and 3 if provided.
     """
     reports: list[CrawlReport] = []
+
+    async def _notify(phase: str, detail: str) -> None:
+        if emit_fn is not None:
+            await emit_fn(phase, detail)
 
     try:
         report1, top_urls = await _pass1(sitefacts.url)
         reports.append(report1)
 
         if max_depth >= 2:
+            await _notify("sub_agent_pass_2", f"deep crawl {len(top_urls)} pages")
             report2 = await _pass2(top_urls, sitefacts.url)
             reports.append(report2)
 
             if max_depth >= 3:
+                await _notify("sub_agent_pass_3", "cross-page synthesis")
                 report3 = await _pass3(report1, report2, sitefacts)
                 reports.append(report3)
 

@@ -1,9 +1,12 @@
 """
 FastAPI service — receives SiteFacts, runs 4 agents + aggregator, returns AuditReport.
 
-POST /audit          → run full pipeline (sync, waits for result)
-POST /audit/batch    → run multiple SiteFacts (list)
-GET  /health         → liveness check
+POST /audit                  → run full pipeline (sync, waits for result)
+POST /audit/start            → fire-and-forget, returns agent_ids immediately for SSE streaming
+POST /audit/batch            → run multiple SiteFacts (list)
+GET  /agent/stream/{id}      → SSE stream of AgentStatusEvents for a running agent
+GET  /audit/{id}/result      → poll for AuditReport once streaming completes
+GET  /health                 → liveness check
 """
 from __future__ import annotations
 
@@ -11,14 +14,15 @@ import asyncio
 import logging
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.agents.content_signal import ContentSignalAgent
 from app.agents.crawlability.agent import run_crawlability_agent
 from app.agents.entity_topic import EntityTopicAgent
 from app.agents.structured_data import StructuredDataAgent
 from app.report.aggregator import aggregate
-from app.schemas import AgentResult, AuditReport, SiteFacts
+from app.schemas import AgentResult, AuditReport, AuditStartRequest, SiteFacts
+import app.state as state
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -27,7 +31,7 @@ app = FastAPI(title="Agents SEO — Inference Layer", version="0.1.0")
 
 
 async def _run_agents(sitefacts: SiteFacts) -> list[AgentResult]:
-    """Run all 4 agents concurrently."""
+    """Run all 4 agents concurrently (no streaming)."""
     results = await asyncio.gather(
         run_crawlability_agent(sitefacts),
         ContentSignalAgent().run(sitefacts),
@@ -44,6 +48,42 @@ async def _run_agents(sitefacts: SiteFacts) -> list[AgentResult]:
         else:
             agent_results.append(r)
     return agent_results
+
+
+async def _run_agents_tracked(
+    audit_id: str,
+    sitefacts: SiteFacts,
+    agent_ids: dict[str, str],
+) -> None:
+    """Run all 4 agents concurrently, emitting SSE events per agent."""
+    names = ["crawlability", "content_signal", "structured_data", "entity_topic"]
+    for aid in agent_ids.values():
+        state.register_agent(aid)
+
+    try:
+        results = await asyncio.gather(
+            run_crawlability_agent(sitefacts, agent_id=agent_ids.get("crawlability")),
+            ContentSignalAgent().run(sitefacts, agent_id=agent_ids.get("content_signal")),
+            StructuredDataAgent().run(sitefacts, agent_id=agent_ids.get("structured_data")),
+            EntityTopicAgent().run(sitefacts, agent_id=agent_ids.get("entity_topic")),
+            return_exceptions=True,
+        )
+        agent_results: list[AgentResult] = []
+        for name, r in zip(names, results):
+            if isinstance(r, Exception):
+                log.warning("Agent %s failed: %s", name, r)
+                agent_results.append(AgentResult(agent=name, score=50))
+            else:
+                agent_results.append(r)
+
+        report = await aggregate([(sitefacts, agent_results)])
+        state.store_result(audit_id, report)
+    except Exception as exc:
+        log.exception("Tracked audit %s failed", audit_id)
+        state.store_result(audit_id, exc)
+    finally:
+        for aid in agent_ids.values():
+            await state.close_agent(aid)
 
 
 @app.post("/audit", response_model=AuditReport)
@@ -70,6 +110,43 @@ async def audit_batch(sitefacts_list: list[SiteFacts]) -> list[AuditReport]:
 async def _run_single(sitefacts: SiteFacts) -> AuditReport:
     agent_results = await _run_agents(sitefacts)
     return await aggregate([(sitefacts, agent_results)])
+
+
+@app.post("/audit/start")
+async def audit_start(req: AuditStartRequest) -> JSONResponse:
+    """Fire-and-forget: start agents in background, return agent_ids immediately."""
+    asyncio.create_task(
+        _run_agents_tracked(req.audit_id, req.sitefacts, req.agent_ids)
+    )
+    return JSONResponse({"audit_id": req.audit_id, "agent_ids": req.agent_ids})
+
+
+@app.get("/agent/stream/{agent_id}")
+async def agent_stream(agent_id: str) -> StreamingResponse:
+    """SSE stream of AgentStatusEvents for a single running agent."""
+    queue = state.get_queue(agent_id)
+    if queue is None:
+        raise HTTPException(status_code=404, detail="Unknown agent_id — audit not started or already expired")
+
+    async def generate():
+        while True:
+            event = await queue.get()
+            if event is None:   # sentinel: agent finished
+                break
+            yield f"event: agent_status\ndata: {event.model_dump_json()}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@app.get("/audit/{audit_id}/result")
+async def audit_result(audit_id: str):
+    """Poll for the completed AuditReport. Returns 202 while still running."""
+    result = state.get_result(audit_id)
+    if result is None:
+        return JSONResponse({"status": "running"}, status_code=202)
+    if isinstance(result, BaseException):
+        raise HTTPException(status_code=500, detail=str(result))
+    return result
 
 
 @app.get("/health")

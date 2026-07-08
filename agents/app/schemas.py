@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 
@@ -216,3 +217,24 @@ class AuditReport(BaseModel):
     summary: str
     site: SiteSummary
     pages: list[PageResult]
+
+
+# ---------------------------------------------------------------------------
+# Streaming — agent status events
+# ---------------------------------------------------------------------------
+
+class AgentStatusEvent(BaseModel):
+    agent_id: str
+    agent: str      # "crawlability" | "content_signal" | "structured_data" | "entity_topic"
+    phase: str      # started | building_prompt | llm_call | retry | parsing_result |
+                    # sub_agent_pass_1 | sub_agent_pass_2 | sub_agent_pass_3 |
+                    # judgment_call | applying_hard_gates | complete | error
+    detail: Optional[str] = None    # model role, pass note, gate name, error msg
+    score: Optional[int] = None     # populated only on "complete"
+    ts: float = Field(default_factory=time.time)
+
+
+class AuditStartRequest(BaseModel):
+    sitefacts: SiteFacts
+    audit_id: str
+    agent_ids: dict[str, str]   # {"crawlability": "uuid1", "content_signal": "uuid2", ...}
