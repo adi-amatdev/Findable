@@ -1,6 +1,5 @@
 ---
-title: okf
-description: Directory listing for progressive disclosure.
+okf_version: "0.1"
 ---
 
 # okf

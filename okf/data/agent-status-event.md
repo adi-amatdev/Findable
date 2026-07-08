@@ -1,5 +1,5 @@
 ---
-type: DataContract
+type: Data Contract
 title: AgentStatusEvent
 status: implemented
 description: The SSE payload emitted by each agent during execution — one event per phase change, streamed to the frontend via GET /agent/stream/{agent_id}.

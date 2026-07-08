@@ -2,17 +2,19 @@
 // Connects to: {apiBase}/agent/stream/{agentId}
 // which the main API (FastAPI) proxies to the agents-api.
 //
-// Event contract (tolerant by design):
-//   - plain text data            -> treated as a token chunk
-//   - {"type":"token","text"}    -> token chunk
-//   - {"type":"status", ...}     -> lifecycle ("started" | "finished")
-//   - {"type":"result", ...}     -> final AgentResult JSON
-//   - {"type":"done"}            -> stream complete
-// Connection errors surface as `offline`.
+// Wire format (OKF — see okf/components/streaming.md):
+//   event: agent_status
+//   data: {"agent_id":"<uuid>","agent":"<name>","phase":"<phase>","detail":"...","score":null,"ts":...}
+//
+// Phase "complete" -> stream done. "error" -> stream failed.
 
 export interface StreamHandlers {
-  onToken: (text: string) => void;
-  onResult?: (result: unknown) => void;
+  onPhase: (
+    agentName: string,
+    phase: string,
+    detail: string | null,
+    score: number | null,
+  ) => void;
   onDone: () => void;
   onOffline: (message: string) => void;
 }
@@ -20,36 +22,38 @@ export interface StreamHandlers {
 export function openAgentStream(
   apiBase: string,
   agentId: string,
-  h: StreamHandlers
+  h: StreamHandlers,
 ): () => void {
   let closed = false;
   const url = `${apiBase}/agent/stream/${agentId}`;
   const es = new EventSource(url);
 
-  es.onmessage = (ev) => {
+  es.addEventListener("agent_status", (ev) => {
     if (closed) return;
-    const data = ev.data ?? "";
     try {
-      const msg = JSON.parse(data);
-      if (msg && typeof msg === "object" && "type" in msg) {
-        if (msg.type === "token" && typeof msg.text === "string") h.onToken(msg.text);
-        else if (msg.type === "result") h.onResult?.(msg);
-        else if (msg.type === "done") {
+      const event = JSON.parse(ev.data);
+      if (event && typeof event === "object" && "phase" in event) {
+        if (event.phase === "complete") {
+          h.onPhase(event.agent, event.phase, event.detail ?? null, event.score ?? null);
           h.onDone();
           close();
+        } else if (event.phase === "error") {
+          h.onPhase(event.agent, event.phase, event.detail ?? null, null);
+          h.onDone();
+          close();
+        } else {
+          h.onPhase(event.agent, event.phase, event.detail ?? null, null);
         }
-        return;
       }
     } catch {
-      /* not JSON — fall through to plain token */
+      /* ignore malformed JSON */
     }
-    if (data) h.onToken(data);
-  };
+  });
 
   es.onerror = () => {
     if (closed) return;
     if (es.readyState === EventSource.CLOSED) {
-      h.onOffline("Agent stream is not live yet — the backend endpoint ships soon.");
+      h.onOffline("Agent stream is not live yet.");
       close();
     }
   };

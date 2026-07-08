@@ -88,6 +88,20 @@ export interface Entity {
   label: string;
 }
 
+export interface AgentStatusEvent {
+  agent_id: string;
+  agent: string;
+  phase: string;
+  detail: string | null;
+  score: number | null;
+  ts: number;
+}
+
+export interface AuditStartResponse {
+  audit_id: string;
+  agent_ids: Record<string, string>;
+}
+
 export interface SiteFacts {
   url: string;
   final_url: string;

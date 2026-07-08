@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { animate, stagger, svg } from "animejs";
 import AgentColumn, { AgentState } from "../components/AgentColumn";
 import FactsStrip from "../components/FactsStrip";
@@ -8,7 +8,7 @@ import ReportBar from "../components/ReportBar";
 import Spinner from "../components/Spinner";
 import LivingBackground from "../components/LivingBackground";
 import { AGENTS } from "../lib/agents";
-import { API_BASE, getSiteFacts } from "../lib/api";
+import { API_BASE, getSiteFacts, postAuditStart, getAuditResult } from "../lib/api";
 import { openAgentStream } from "../lib/stream";
 import type { SiteFacts } from "../lib/types";
 
@@ -135,12 +135,9 @@ export default function Home() {
   const [wiki, setWiki] = useState<string | null>(null);
   const closers = useRef<Array<() => void>>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const auditIdRef = useRef<string | null>(null);
   const columnsRef = useRef<HTMLDivElement>(null);
   const decoRef = useRef<SVGSVGElement | null>(null);
-
-  const patchAgent = useCallback((id: string, patch: Partial<AgentState>) => {
-    setAgents((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
-  }, []);
 
   // Animate decorative line under hero
   useEffect(() => {
@@ -177,7 +174,17 @@ export default function Home() {
     if (!settled) return;
 
     const cols = columnsRef.current?.querySelectorAll(".agent-col");
-    const finish = () => {
+    const finish = async () => {
+      if (auditIdRef.current) {
+        try {
+          const result = await getAuditResult(auditIdRef.current);
+          setReport(JSON.stringify(result, null, 2));
+          setStage("report");
+          return;
+        } catch {
+          /* fall through to client-side compose */
+        }
+      }
       setReport(composeReport(facts, agents));
       setStage("report");
     };
@@ -227,10 +234,26 @@ export default function Home() {
     const ac = new AbortController();
     abortRef.current = ac;
 
+    let sf: SiteFacts;
     try {
-      const sf = await getSiteFacts(value, false, ac.signal);
+      sf = await getSiteFacts(value, false, ac.signal);
       if (ac.signal.aborted) return;
       setFacts(sf);
+    } catch (err: unknown) {
+      if (ac.signal.aborted) return;
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setStage("idle");
+      return;
+    }
+
+    if (ac.signal.aborted) return;
+
+    let agentIds: Record<string, string>;
+    try {
+      const start = await postAuditStart(value, ac.signal);
+      if (ac.signal.aborted) return;
+      agentIds = start.agent_ids;
+      auditIdRef.current = start.audit_id;
     } catch (err: unknown) {
       if (ac.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -243,18 +266,32 @@ export default function Home() {
 
     closers.current.forEach((c) => c());
     closers.current = AGENTS.map((a) =>
-      openAgentStream(API_BASE, a.id, {
-        onToken: (text) =>
-          setAgents((prev) => ({
-            ...prev,
-            [a.id]: {
-              ...prev[a.id],
-              phase: "streaming",
-              text: prev[a.id].text + text,
-            },
-          })),
-        onDone: () => patchAgent(a.id, { phase: "done" }),
-        onOffline: (note) => patchAgent(a.id, { phase: "offline", note }),
+      openAgentStream(API_BASE, agentIds[a.id], {
+        onPhase: (agentName, phase, detail) => {
+          setAgents((prev) => {
+            const st = prev[agentName];
+            return {
+              ...prev,
+              [agentName]: {
+                ...st,
+                phase: phase === "complete" || phase === "error" ? st.phase : "streaming",
+                text: st.text + (detail ? detail + "\n" : `${phase}\n`),
+              },
+            };
+          });
+        },
+        onDone: () => {
+          setAgents((prev) => {
+            const st = prev[a.id];
+            return { ...prev, [a.id]: { ...st, phase: "done" } };
+          });
+        },
+        onOffline: (note) => {
+          setAgents((prev) => {
+            const st = prev[a.id];
+            return { ...prev, [a.id]: { ...st, phase: "offline", note } };
+          });
+        },
       })
     );
   }
@@ -262,6 +299,7 @@ export default function Home() {
   function cancel() {
     abortRef.current?.abort();
     abortRef.current = null;
+    auditIdRef.current = null;
     closers.current.forEach((c) => c());
     closers.current = [];
     setStage("idle");

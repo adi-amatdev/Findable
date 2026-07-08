@@ -141,11 +141,6 @@ def cmd_index(args):
 
         label = d.name if d != bundle else bundle.name
         lines = [
-            "---",
-            f"title: {label}",
-            "description: Directory listing for progressive disclosure.",
-            "---",
-            "",
             f"# {label}",
             "",
         ]
@@ -160,7 +155,7 @@ def cmd_index(args):
                 fm, _ = parse_frontmatter(cf.read_text(encoding="utf-8"))
                 fm = fm or {}
                 desc = fm.get("description") or fm.get("title") or ""
-                suffix = f" -- {desc}" if desc else ""
+                suffix = f" - {desc}" if desc else ""
                 lines.append(f"- [{cf.stem}]({cf.name}){suffix}")
             lines.append("")
 

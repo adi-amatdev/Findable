@@ -1,8 +1,6 @@
 // Backend client. Points at the Findable FastAPI app.
-// Only the implemented route is wired: POST /api/sitefacts.
-// (Audit / SSE routes are planned — see agents-seo-okf/components/api.md.)
 
-import type { SiteFacts } from "./types";
+import type { AuditStartResponse, SiteFacts } from "./types";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -46,5 +44,39 @@ export async function getSiteFacts(
     throw new ApiError(res.status, msg);
   }
 
+  return res.json();
+}
+
+export async function postAuditStart(
+  url: string,
+  signal?: AbortSignal
+): Promise<AuditStartResponse> {
+  const res = await fetch(`${API_BASE}/api/audit/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+    signal,
+  });
+  if (!res.ok) {
+    let msg = `Failed to start audit (HTTP ${res.status}).`;
+    try {
+      const body = await res.json();
+      if (body?.detail) msg = body.detail;
+    } catch {
+      /* keep default */
+    }
+    throw new ApiError(res.status, msg);
+  }
+  return res.json();
+}
+
+export async function getAuditResult(
+  auditId: string,
+  signal?: AbortSignal
+): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/api/audit/${auditId}`, { signal });
+  if (!res.ok) {
+    throw new ApiError(res.status, `Failed to get audit result (HTTP ${res.status})`);
+  }
   return res.json();
 }

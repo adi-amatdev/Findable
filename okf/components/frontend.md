@@ -9,9 +9,11 @@ timestamp: 2026-07-08T00:00:00Z
 
 # Next.js Frontend
 
-Lives in `frontend/`. Minimal, space-efficient single page (plain CSS + anime.js
-for motion; no chart/CSS frameworks). Communicates with the
-[FastAPI layer](/components/api.md).
+Lives in `frontend/`. Single-page dashboard (plain CSS + anime.js for motion;
+no chart/CSS frameworks). Communicates with the
+[FastAPI layer](/components/api.md). Active during `crawling` or `judging`
+stages turns the Audit button into a Cancel button (red styling) that aborts
+the fetch and closes all SSE streams.
 
 ## Flow (as built)
 
