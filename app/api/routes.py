@@ -12,14 +12,16 @@ Implemented:
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..cache import Cache, get_cache
 from ..config import Settings, get_settings
 from ..crawl.firecrawl import FirecrawlClient, FirecrawlError
+from .. import mock as mock_state
 from ..models.api_models import ScrapeRequest, SiteFactsRequest
 from ..models.contracts import SiteFacts
 from ..pipeline import SiteFactsPipeline
@@ -109,19 +111,32 @@ async def audit_start(
     pipeline: SiteFactsPipeline = Depends(get_pipeline),
     settings: Settings = Depends(get_settings),
 ):
-    """Crawl URL → SiteFacts → fire agents async → return agent_ids immediately for SSE streaming."""
+    """Crawl URL -> SiteFacts -> fire agents async -> return agent_ids for SSE streaming.
+
+    When MOCK_STREAM=true: skips Firecrawl and agents-api entirely.
+    Uses a static SiteFacts + static AuditReport. SSE events still stream on
+    a realistic schedule so the frontend UI can be developed without API costs.
+    """
+    audit_id = str(uuid.uuid4())
+    agent_ids = {
+        name: str(uuid.uuid4())
+        for name in ["crawlability", "content_signal", "structured_data", "entity_topic"]
+    }
+
+    if settings.mock_stream:
+        # Register in-process queues for each agent, fire background emitter.
+        for aid in agent_ids.values():
+            mock_state.register_agent(aid)
+        asyncio.create_task(mock_state.run_mock_audit(audit_id, agent_ids))
+        return JSONResponse({"audit_id": audit_id, "agent_ids": agent_ids, "mock": True})
+
+    # ── Real path ────────────────────────────────────────────────────────────
     if not settings.agents_url:
         raise HTTPException(status_code=503, detail="AGENTS_URL not configured")
     try:
         sf = await pipeline.run(str(req.url), refresh=req.refresh)
     except FirecrawlError as err:
         _raise_firecrawl(err)
-
-    audit_id = str(uuid.uuid4())
-    agent_ids = {
-        name: str(uuid.uuid4())
-        for name in ["crawlability", "content_signal", "structured_data", "entity_topic"]
-    }
 
     payload = {
         "sitefacts": sf.model_dump(by_alias=True),
@@ -153,7 +168,22 @@ async def agent_stream_proxy(
     agent_id: str,
     settings: Settings = Depends(get_settings),
 ):
-    """Transparent SSE proxy — forwards agents-api stream to the frontend."""
+    """SSE stream for one agent.
+
+    Mock mode: drains the in-process asyncio.Queue registered by /api/audit/start.
+    Real mode: transparent byte-for-byte proxy to agents-api.
+    """
+    if settings.mock_stream:
+        q = mock_state.get_queue(agent_id)
+        if q is None:
+            raise HTTPException(status_code=404, detail=f"Unknown agent_id: {agent_id}")
+        return StreamingResponse(
+            mock_state.sse_stream(agent_id),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # ── Real path ────────────────────────────────────────────────────────────
     async def generate():
         try:
             async with httpx.AsyncClient(timeout=None) as client:
@@ -174,7 +204,18 @@ async def audit_result_proxy(
     audit_id: str,
     settings: Settings = Depends(get_settings),
 ):
-    """Poll proxy — returns AuditReport or 202 while still running."""
+    """Returns AuditReport or 202 while still running.
+
+    Mock mode: reads from in-process result store.
+    Real mode: proxies to agents-api.
+    """
+    if settings.mock_stream:
+        report = mock_state.get_result(audit_id)
+        if report is None:
+            return JSONResponse({"status": "running", "mock": True}, status_code=202)
+        return report
+
+    # ── Real path ────────────────────────────────────────────────────────────
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(

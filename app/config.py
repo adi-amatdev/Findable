@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     # Leave blank to disable forwarding (sitefacts-only mode).
     agents_url: str = "http://localhost:8080"
 
+    # --- Mock stream (dev / frontend testing) ---
+    # When true: POST /api/audit/start skips Firecrawl and agents entirely.
+    # A static SiteFacts + static AuditReport are used. Real SSE events are
+    # still emitted on a realistic schedule so the frontend streaming UI can
+    # be built and tested without burning any API credits.
+    mock_stream: bool = False
+
     # --- Orchestrator scope ---
     max_deep_pages: int = 4    # follow-up pages that get the full 4-agent pass
     max_shallow_pages: int = 50  # ceiling on the deterministic site crawl
