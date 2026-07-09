@@ -1,84 +1,104 @@
-# Backend validation against `okf/`
+# Validation
 
-Validates the current backend against the architecture spec in `okf/`
-(OKF bundle: 9 components, 4 agents, 3 data contracts, 2 scoring metrics, 2
-external deps, 4 decisions).
-
-**Scope of this build (per request):** implement the pipeline **`URL → Firecrawl
-(+ direct fetch) → SiteFacts`** and nothing beyond it. Everything downstream of
-`SiteFacts` is scaffolded, not implemented.
+Validates the current codebase against the architecture spec in `okf/`.
 
 ## Verdict
 
-The implemented slice **conforms** to the spec's front half — Crawl & Fetch,
-Deterministic Extraction, the `SiteFacts` contract, and the Cache — including the
-core design principle (Deterministic–LLM Separation: all parsing in plain code,
-no LLM). Downstream layers (agents, model router, scoring, aggregation,
-orchestrator, SSE API) are **scaffolded with typed interfaces** so they drop onto
-the implemented base without rework.
+The full stack is **implemented and working** end-to-end: crawl → SiteFacts → 4 agents → scoring → aggregation → SSE streaming → frontend. The original scope statement ("SiteFacts pipeline only") is obsolete.
 
-## Component-by-component mapping
+## Component map
 
-| Spec component | Status | Where |
+| Component | Status | Where |
 |---|---|---|
-| `crawl-fetch` (Firecrawl + httpx: robots/sitemap/llms.txt, raw+rendered) | ✅ Implemented | `app/crawl/` (`firecrawl.py`, `fetch.py`, `fetcher.py`) |
-| `extraction` (deterministic → SiteFacts) | ✅ Implemented | `app/extraction/extractor.py` |
-| `data/site-facts` (SiteFacts contract) | ✅ Implemented | `app/models/contracts.py` |
-| `cache` (URL-hash keyed, Redis) | ✅ Implemented | `app/cache/store.py` |
-| `api` (HTTP entrypoint) | 🟡 Partial | `app/api/` — `POST /api/sitefacts` implemented; spec's `/api/audit` + SSE not built (no report yet) |
-| `data/agent-result`, `data/audit-report` | 🟡 Contract only | `app/models/contracts.py` (`AgentResult` defined; `AuditReport` deferred) |
-| `agents/*` (4 agents) | ⬜ Scaffold | `app/agents/base.py` (interface only) |
-| `model-router` | ⬜ Scaffold | `app/llm/` (`roles.py` = real route table; `router.py` = interface) |
-| `scoring/*` (AI Readiness, Visibility) | ⬜ Not built | — (documented as next layer) |
-| `aggregator` | ⬜ Not built | — |
-| `orchestrator` (asyncio fan-out, tiers) | ⬜ Not built | pipeline is single-page landing only |
-| `vllm-server`, `external/fireworks-api` | ⬜ Not built | config placeholders in `app/config.py` |
-| `frontend`, `pdf-export` | ⬜ Out of scope | backend-only build |
+| `crawl-fetch` | ✅ Implemented | `app/crawl/` (`firecrawl.py`, `fetch.py`, `fetcher.py`) |
+| `extraction` | ✅ Implemented | `app/extraction/extractor.py` |
+| `cache` | ✅ Implemented | `app/cache/store.py` — Redis, URL-hash keyed, graceful degradation |
+| `pipeline` | ✅ Implemented | `app/pipeline.py` — `SiteFactsPipeline.run(url)` |
+| `api` | ✅ Implemented | `app/api/routes.py` — all routes live (see below) |
+| `streaming` | ✅ Implemented | `agents/app/state.py` + SSE routes on both services |
+| `mock-stream` | ✅ Implemented | `app/mock.py` — `MOCK_STREAM=true` bypasses all external services |
+| `agents/*` (4 agents) | ✅ Implemented | `agents/app/agents/` — all four agents with LLM calls and SSE phase emission |
+| `crawlability sub-agent` | ✅ Implemented | `agents/app/agents/crawlability/sub_agent.py` — 3-pass deterministic crawl |
+| `model-router` | ✅ Implemented | `agents/app/models/router.py` — Ollama / vLLM / Fireworks failover chain |
+| `scoring/ai-readiness-score` | ✅ Implemented | `agents/app/scoring/rubric.py` — weighted formula + hard gates |
+| `scoring/visibility-estimate` | ✅ Implemented | `agents/app/scoring/visibility.py` — before/after per-bot estimate |
+| `aggregator` | ✅ Implemented | `agents/app/report/aggregator.py` — systemic findings + LLM summary |
+| `data/site-facts` | ✅ Implemented | `app/models/contracts.py` |
+| `data/agent-result` | ✅ Implemented | `agents/app/schemas.py` — produced by all 4 agents |
+| `data/audit-report` | ✅ Implemented | `agents/app/schemas.py` — produced by aggregator |
+| `data/agent-status-event` | ✅ Implemented | `agents/app/schemas.py` — emitted per phase by every agent |
+| `frontend` | ✅ Implemented | `frontend/` — Next.js, full stage flow, ReportDashboard, SSE columns |
+| `vllm-server` | ✅ Wired | `agents/app/models/router.py` via `VLLM_URL` env var |
+| `external/fireworks-api` | ✅ Wired | `agents/app/models/router.py` via `FIREWORKS_KEY` env var |
+| `orchestrator` (multi-page fan-out) | 🟡 Partial | `asyncio.gather` fan-out exists in `agents/app/main.py`; Tier-2/3 multi-page crawl not built |
+| `pdf-export` | ✅ Implemented | `handleDownloadPdf()` in `ReportDashboard.tsx` — opens styled HTML in new window, triggers `window.print()`; also exports markdown via `handleDownloadMd()`. Server-side Playwright route (`GET /api/audit/{id}/report.pdf`) not built. |
 
-## `SiteFacts` contract conformance
+Note: `app/llm/router.py` is a backend-side scaffold (raises `NotImplementedError`) — the real working model router is `agents/app/models/router.py`.
 
-Every field in `okf/data/site-facts.md` is produced:
+## API routes
+
+### Backend (`app/api/routes.py`)
+
+| Route | Status |
+|---|---|
+| `POST /api/sitefacts` | ✅ |
+| `POST /api/audit` | ✅ blocking — crawl → SiteFacts → agents-api |
+| `POST /api/audit/start` | ✅ async — returns `{audit_id, agent_ids}` for SSE |
+| `GET /agent/stream/{agent_id}` | ✅ SSE proxy to agents-api (or mock queue) |
+| `GET /api/audit/{audit_id}` | ✅ poll proxy — 202 while running, report when done |
+| `POST /scrape` | ✅ raw Firecrawl passthrough |
+| `GET /health` | ✅ |
+
+### Agents-api (`agents/app/main.py`)
+
+| Route | Status |
+|---|---|
+| `POST /audit` | ✅ blocking — 4 agents + aggregator |
+| `POST /audit/start` | ✅ async — background task, returns immediately |
+| `POST /audit/batch` | ✅ up to 10 SiteFacts |
+| `GET /agent/stream/{agent_id}` | ✅ SSE drain from `state.py` queue |
+| `GET /audit/{audit_id}/result` | ✅ 202 while running, AuditReport when done |
+| `GET /health` | ✅ |
+
+## SiteFacts contract conformance
 
 | Field | Status | Notes |
 |---|---|---|
-| `http` (status/latency/redirects/content_type) | ✅ | from the direct httpx fetch |
-| `robots.allows` (per AI bot) | ✅ | parses robots.txt groups for GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot, Google-Extended, CCBot |
-| `sitemap` (exists/valid/url_count) | ✅ | lxml-validated |
-| `llms_txt` (exists/valid/has_summary/link_count) | ✅ | `full_variant` always false (llms-full.txt not fetched) |
-| `render.js_dependency_ratio` + `content_visible_without_js` | ✅ | `1 − raw_text_len/rendered_text_len` (raw = httpx, rendered = Firecrawl) |
+| `http` | ✅ | httpx direct fetch |
+| `robots.allows` (per AI bot) | ✅ | GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot, Google-Extended, CCBot |
+| `sitemap` | ✅ | lxml-validated |
+| `llms_txt` | ✅ | `full_variant` always false (llms-full.txt not fetched) |
+| `render.js_dependency_ratio` + `content_visible_without_js` | ✅ | `1 - raw_text_len / rendered_text_len` |
 | `html` (title/desc/canonical/lang/outline/word_count/og/twitter) | ✅ | BeautifulSoup |
-| `structured_data` (schema_types/jsonld_valid/errors) | 🟡 | **JSON-LD only** — see deviations |
-| `links` (internal/external/outbound_citations) | 🟡 | `outbound_citations` ≈ external-link count (heuristic proxy) |
-| `authorship` (byline/author_schema/dates) | ✅ | meta + JSON-LD |
-| `entities_raw` | 🟡 | **heuristic**, not spaCy — see deviations |
+| `structured_data` | 🟡 | JSON-LD only — Microdata/RDFa via `extruct` deferred |
+| `links` | 🟡 | `outbound_citations` proxied by external-link count |
+| `authorship` | ✅ | meta + JSON-LD |
+| `entities_raw` | 🟡 | capitalized-phrase heuristic, not spaCy — `label` always `MISC` |
 
-## Deliberate scoping deviations (and why)
+## Deliberate deviations
 
-1. **Structured data: BeautifulSoup JSON-LD, not `extruct`.** The spec calls for
-   `extruct` (JSON-LD + Microdata + RDFa + OpenGraph). JSON-LD covers the large
-   majority of real-world schema; `extruct` is a light drop-in behind
-   `_structured_data()` when Microdata/RDFa coverage is needed.
-2. **Entities: capitalized-phrase heuristic, not `spaCy` NER.** spaCy adds a
-   heavy model download; the heuristic keeps the build fast and dependency-light.
-   Swap in behind `_entities()`.
-3. **`outbound_citations` is a proxy** (external-link count) rather than
-   "citations inside article content."
-4. **Single page only.** The spec's Tier-2/Tier-3 multi-page crawl lives in the
-   (unbuilt) orchestrator; the pipeline audits one URL.
-5. **Cache is Redis, not SQLite.** The spec allows either ("Redis-compatible");
-   this reuses the existing Redis service.
+1. **Structured data: JSON-LD only, not `extruct`.** Covers the common case; `extruct` slots in behind `_structured_data()`.
+2. **Entities: heuristic, not spaCy NER.** Keeps the build dependency-light; spaCy slots in behind `_entities()`.
+3. **`outbound_citations` is a proxy** (external-link count).
+4. **Orchestrator is single-page.** Tier-2/3 multi-page fan-out is not built — the pipeline audits one URL deep.
+5. **Cache is Redis, not SQLite.** The spec allows either; Redis was already in the stack.
+6. **vLLM via Jupyter/cloudflared tunnel**, not a local ROCm Docker container. The `rocm/vllm` path remains valid for AMD GPU workstations and is the production target.
 
-## Design-principle check
+## Design principles
 
-- **Deterministic–LLM Separation (Principle 1):** ✅ enforced — extraction is
-  100% deterministic; no LLM touches `SiteFacts`. Same URL → same `SiteFacts`.
-- **Parallel Inference on AMD (Principle 2):** ⬜ N/A yet (no inference layer).
+- **Deterministic–LLM Separation (Principle 1):** ✅ — extraction is 100% deterministic; no LLM touches `SiteFacts`.
+- **Parallel Inference (Principle 2):** 🟡 — `asyncio.gather` fan-out is built and fires all 4 agents concurrently; targets Jupyter/cloudflared vLLM rather than local ROCm container.
 
 ## Run & verify
 
 ```bash
+# Backend + SiteFacts pipeline
 uv sync --group dev
-uv run pytest -q                 # 19 tests: extraction, cache, API
-uv run uvicorn app.main:app --reload
-# POST /api/sitefacts {"url": "..."}  ->  SiteFacts
+uv run pytest -q                          # 19 tests, fully offline
+
+# Full stack
+docker compose up --build                 # backend :8000, agents-api :8080, frontend :3000
+
+# Zero-cost demo (no API keys needed)
+MOCK_STREAM=true docker compose up --build
 ```
