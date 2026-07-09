@@ -75,8 +75,17 @@ export async function getAuditResult(
   signal?: AbortSignal
 ): Promise<AuditReport> {
   const res = await fetch(`${API_BASE}/api/audit/${auditId}`, { signal });
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    throw new ApiError(res.status, `Failed to parse audit result (HTTP ${res.status})`);
+  }
+  if (body && typeof body === "object" && "status" in body && (body as Record<string, unknown>).status === "running") {
+    throw new ApiError(202, "Audit result not ready yet");
+  }
   if (!res.ok) {
     throw new ApiError(res.status, `Failed to get audit result (HTTP ${res.status})`);
   }
-  return res.json();
+  return body as AuditReport;
 }

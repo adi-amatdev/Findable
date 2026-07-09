@@ -272,7 +272,7 @@ _SCHEDULES: dict[str, list[tuple[float, str, str | None, int | None]]] = {
 }
 
 # How long after start() the report becomes available (just after the last agent)
-_REPORT_DELAY = 6.0
+_REPORT_DELAY = 4.0
 
 
 # ---------------------------------------------------------------------------

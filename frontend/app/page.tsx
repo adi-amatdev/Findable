@@ -8,7 +8,7 @@ import ReportDashboard from "../components/ReportDashboard";
 import Spinner from "../components/Spinner";
 import LivingBackground from "../components/LivingBackground";
 import { AGENTS } from "../lib/agents";
-import { API_BASE, getSiteFacts, postAuditStart, getAuditResult } from "../lib/api";
+import { API_BASE, ApiError, getSiteFacts, postAuditStart, getAuditResult } from "../lib/api";
 import { openAgentStream } from "../lib/stream";
 import type { AuditReport, SiteFacts } from "../lib/types";
 
@@ -198,13 +198,23 @@ export default function Home() {
     setTimeout(() => setContinueReady(true), 600);
 
     if (auditIdRef.current) {
-      getAuditResult(auditIdRef.current)
-        .then((result) => {
-          setReport(transformBackendReport(result as unknown as Record<string, unknown>, url));
-        })
-        .catch(() => {
-          setReport(composeFallbackReport(url, facts, agents));
-        });
+      let retries = 0;
+      const maxRetries = 10;
+      const poll: () => void = () => {
+        getAuditResult(auditIdRef.current!)
+          .then((result) => {
+            setReport(transformBackendReport(result as unknown as Record<string, unknown>, url));
+          })
+          .catch((err: unknown) => {
+            if (err instanceof ApiError && err.status === 202 && retries < maxRetries) {
+              retries++;
+              setTimeout(poll, 1500);
+              return;
+            }
+            setReport(composeFallbackReport(url, facts, agents));
+          });
+      };
+      poll();
     }
   }, [agents, stage, agentsDone]);
 
