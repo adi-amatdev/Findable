@@ -1293,16 +1293,6 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
 }
 
 /* === PROCESSING STEPS === */
-.processing-spinner {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--border);
-  border-top-color: var(--gold-2);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 24px;
-}
-
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -1310,21 +1300,22 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
 .processing-steps {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
   width: 100%;
-  max-width: 260px;
+  max-width: 220px;
+  transition: opacity 0.4s ease;
 }
 
 .proc-step {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  gap: 12px;
+  font-size: 14px;
   color: var(--muted);
-  transition: color 0.3s ease;
+  transition: color 0.4s ease;
 }
 
-.proc-step.active { color: var(--text); }
+.proc-step.active { color: var(--gold-2); }
 .proc-step.done { color: var(--good); }
 
 .proc-dot {
@@ -1336,29 +1327,51 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
   transition: background 0.3s ease;
 }
 
-.proc-step.active .proc-dot {
-  background: var(--gold-2);
-  box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
-}
-
-.proc-step.done .proc-dot {
-  background: var(--good);
-}
-
 /* === GENERATING CARD === */
 .generating-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 60px 28px;
-  margin: 40px auto;
-  max-width: 420px;
+  padding: 48px 36px;
+  margin: 48px auto;
+  max-width: 340px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   backdrop-filter: blur(12px);
   text-align: center;
+  gap: 32px;
+}
+
+.generating-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.processing-steps.fade-in {
+  opacity: 0.5;
+}
+
+.proc-check {
+  flex-shrink: 0;
+  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.proc-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--gold-2);
+  border-top-color: transparent;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.6s linear infinite;
 }
 
 .generating-text {

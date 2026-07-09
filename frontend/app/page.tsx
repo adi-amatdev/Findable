@@ -313,13 +313,14 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if (stage !== "generating") return;
-    if (!report) return;
-    const stepTimer = setInterval(() => {
-      setProcessingStep((s) => Math.min(s + 1, PROCESS_STEPS.length));
-    }, 1100);
-    const t = setTimeout(() => setStage("report"), 5000);
-    return () => { clearInterval(stepTimer); clearTimeout(t); };
+    if (stage !== "generating" || !report) return;
+    setProcessingStep(0);
+    const t1 = setTimeout(() => setProcessingStep(1), 400);
+    const t2 = setTimeout(() => setProcessingStep(2), 400 + 1500);
+    const t3 = setTimeout(() => setProcessingStep(3), 400 + 3000);
+    const t4 = setTimeout(() => setProcessingStep(4), 400 + 4500);
+    const t5 = setTimeout(() => setStage("report"), 400 + 6500);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
   }, [stage, report]);
 
   function onContinue() {
@@ -446,25 +447,29 @@ export default function Home() {
 
       {stage === "generating" && (
         <div className="generating-card">
-          {processingStep < PROCESS_STEPS.length ? (
-            <>
-              <div className="processing-spinner" />
-              <div className="processing-steps">
-                {PROCESS_STEPS.map((s, i) => (
-                  <div key={s} className={`proc-step ${i < processingStep ? "done" : i === processingStep ? "active" : ""}`}>
-                    <span className="proc-dot" />
-                    <span className="proc-label">{s}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
+          {processingStep >= PROCESS_STEPS.length && (
+            <div className="generating-top">
               <AnimatedCheckmark />
               <p className="generating-text">Report ready</p>
-              <p className="generating-sub">Opening your audit dashboard</p>
-            </>
+            </div>
           )}
+          <div className={`processing-steps ${processingStep >= PROCESS_STEPS.length ? "fade-in" : ""}`}>
+            {PROCESS_STEPS.map((s, i) => (
+              <div key={s} className={`proc-step ${i < processingStep ? "done" : i === processingStep ? "active" : ""}`}>
+                {i < processingStep ? (
+                  <svg className="proc-check" viewBox="0 0 16 16" width="16" height="16">
+                    <circle cx="8" cy="8" r="7" fill="var(--good)" />
+                    <path d="M5 8.5 L7 10.5 L11 6" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : i === processingStep ? (
+                  <span className="proc-spinner" />
+                ) : (
+                  <span className="proc-dot" />
+                )}
+                <span className="proc-label">{s}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
