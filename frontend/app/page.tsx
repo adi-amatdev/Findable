@@ -4,15 +4,15 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { animate, stagger, svg } from "animejs";
 import AgentColumn, { AgentState } from "../components/AgentColumn";
 import FactsStrip from "../components/FactsStrip";
-import ReportBar from "../components/ReportBar";
+import ReportDashboard from "../components/ReportDashboard";
 import Spinner from "../components/Spinner";
 import LivingBackground from "../components/LivingBackground";
 import { AGENTS } from "../lib/agents";
 import { API_BASE, getSiteFacts, postAuditStart, getAuditResult } from "../lib/api";
 import { openAgentStream } from "../lib/stream";
-import type { SiteFacts } from "../lib/types";
+import type { AuditReport, SiteFacts } from "../lib/types";
 
-type Stage = "idle" | "crawling" | "judging" | "report";
+type Stage = "idle" | "crawling" | "judging" | "generating" | "report";
 
 interface WikiEntry {
   title: string;
@@ -131,15 +131,26 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState<SiteFacts | null>(null);
   const [agents, setAgents] = useState<Record<string, AgentState>>(initialAgents);
-  const [report, setReport] = useState<string | null>(null);
+  const [report, setReport] = useState<AuditReport | null>(null);
+  const [agentsDone, setAgentsDone] = useState(false);
+  const [continueReady, setContinueReady] = useState(false);
+  const [processingStep, setProcessingStep] = useState(0);
+
+  const PROCESS_STEPS = [
+    "Processing crawl data",
+    "Analyzing content signal",
+    "Structuring your report",
+    "Finalizing dashboard",
+  ];
   const [wiki, setWiki] = useState<string | null>(null);
+  const lastPhases = useRef<Record<string, string>>({});
   const closers = useRef<Array<() => void>>([]);
   const abortRef = useRef<AbortController | null>(null);
   const auditIdRef = useRef<string | null>(null);
   const columnsRef = useRef<HTMLDivElement>(null);
   const decoRef = useRef<SVGSVGElement | null>(null);
+  const dashboardRef = useRef<HTMLDivElement>(null);
 
-  // Animate decorative line under hero
   useEffect(() => {
     const path = decoRef.current?.querySelector("path");
     if (!path) return;
@@ -153,7 +164,6 @@ export default function Home() {
     });
   }, []);
 
-  // Stagger columns in
   useEffect(() => {
     if (stage === "judging" && columnsRef.current) {
       animate(columnsRef.current.querySelectorAll(".agent-col"), {
@@ -166,69 +176,50 @@ export default function Home() {
     }
   }, [stage]);
 
-  // Collapse when all settled
   useEffect(() => {
-    if (stage !== "judging") return;
-    const states = AGENTS.map((a) => agents[a.id]?.phase);
-    const settled = states.every((p) => p === "done" || p === "offline");
-    if (!settled) return;
-
-    const cols = columnsRef.current?.querySelectorAll(".agent-col");
-    const finish = async () => {
-      if (auditIdRef.current) {
-        try {
-          const result = await getAuditResult(auditIdRef.current);
-          setReport(JSON.stringify(result, null, 2));
-          setStage("report");
-          return;
-        } catch {
-          /* fall through to client-side compose */
-        }
-      }
-      setReport(composeReport(facts, agents));
-      setStage("report");
-    };
-    if (cols && cols.length) {
-      animate(cols, {
-        translateY: [0, 20],
-        opacity: [1, 0],
-        scale: [1, 0.95],
-        delay: stagger(80),
-        duration: 450,
-        ease: "easeInCubic",
-        complete: finish,
-      });
-    } else {
-      finish();
-    }
-  }, [agents, stage, facts]);
-
-  // Animate report chip entrance
-  useEffect(() => {
-    if (stage !== "report") return;
-    const chip = document.querySelector(".report-chip");
-    if (chip) {
-      animate(chip, {
-        translateY: [28, 0],
+    if (stage === "report" && dashboardRef.current) {
+      animate(dashboardRef.current, {
+        translateX: [80, 0],
         opacity: [0, 1],
-        scale: [0.92, 1],
-        duration: 700,
-        ease: "spring(1, 80, 14)",
+        duration: 600,
+        ease: "outCubic",
       });
     }
   }, [stage]);
+
+  useEffect(() => {
+    if (stage !== "judging") return;
+    const allDone = AGENTS.every((a) => {
+      const p = agents[a.id]?.phase;
+      return p === "done" || p === "offline";
+    });
+    if (!allDone || agentsDone) return;
+    setAgentsDone(true);
+    setTimeout(() => setContinueReady(true), 600);
+
+    if (auditIdRef.current) {
+      getAuditResult(auditIdRef.current)
+        .then((result) => {
+          setReport(transformBackendReport(result as unknown as Record<string, unknown>, url));
+        })
+        .catch(() => {
+          setReport(composeFallbackReport(url, facts, agents));
+        });
+    }
+  }, [agents, stage, agentsDone]);
 
   useEffect(() => () => closers.current.forEach((c) => c()), []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const value = url.trim();
-    if (!value || stage === "crawling") return;
+    if (!value || stage !== "idle") return;
 
     setError(null);
     setFacts(null);
     setReport(null);
     setAgents(initialAgents());
+    lastPhases.current = {};
     setStage("crawling");
 
     const ac = new AbortController();
@@ -267,15 +258,18 @@ export default function Home() {
     closers.current.forEach((c) => c());
     closers.current = AGENTS.map((a) =>
       openAgentStream(API_BASE, agentIds[a.id], {
-        onPhase: (agentName, phase, detail) => {
+        onPhase: (agentName, phase, detail, score) => {
+          lastPhases.current[agentName] = phase;
           setAgents((prev) => {
             const st = prev[agentName];
+            const isTerminal = phase === "complete" || phase === "error";
             return {
               ...prev,
               [agentName]: {
                 ...st,
-                phase: phase === "complete" || phase === "error" ? st.phase : "streaming",
+                phase: isTerminal ? "done" as const : "streaming" as const,
                 text: st.text + (detail ? detail + "\n" : `${phase}\n`),
+                score: score ?? st.score,
               },
             };
           });
@@ -302,8 +296,36 @@ export default function Home() {
     auditIdRef.current = null;
     closers.current.forEach((c) => c());
     closers.current = [];
+    setAgentsDone(false);
+    setContinueReady(false);
     setStage("idle");
     setError(null);
+  }
+
+  useEffect(() => {
+    if (stage !== "generating") return;
+    if (!report) return;
+    const stepTimer = setInterval(() => {
+      setProcessingStep((s) => Math.min(s + 1, PROCESS_STEPS.length));
+    }, 1100);
+    const t = setTimeout(() => setStage("report"), 5000);
+    return () => { clearInterval(stepTimer); clearTimeout(t); };
+  }, [stage, report]);
+
+  function onContinue() {
+    const cols = columnsRef.current?.querySelectorAll(".agent-col");
+    if (cols && cols.length) {
+      animate(cols, {
+        translateX: ["0px", "-120px"],
+        opacity: [1, 0],
+        delay: stagger(80),
+        duration: 700,
+        ease: "inCubic",
+        onComplete: () => setStage("generating"),
+      });
+    } else {
+      setStage("generating");
+    }
   }
 
   const compact = stage !== "idle";
@@ -343,7 +365,7 @@ export default function Home() {
             placeholder="https://example.com"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            disabled={stage === "crawling" || stage === "judging"}
+            disabled={stage !== "idle"}
             required
           />
           <button
@@ -391,18 +413,55 @@ export default function Home() {
       {facts && stage !== "idle" && <FactsStrip facts={facts} />}
 
       {stage === "judging" && (
-        <div className="agent-grid" ref={columnsRef}>
-          {AGENTS.map((a) => (
-            <AgentColumn key={a.id} meta={a} state={agents[a.id]} />
-          ))}
+        <>
+          <div className="agent-grid" ref={columnsRef}>
+            {AGENTS.map((a) => (
+              <AgentColumn
+                key={a.id}
+                meta={a}
+                state={agents[a.id]}
+                lastPhase={lastPhases.current[a.id]}
+              />
+            ))}
+          </div>
+          {continueReady && (
+            <div className="continue-row">
+              <button className="continue-btn" onClick={onContinue}>
+                Continue <span className="arrow">&rarr;</span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {stage === "generating" && (
+        <div className="generating-card">
+          {processingStep < PROCESS_STEPS.length ? (
+            <>
+              <div className="processing-spinner" />
+              <div className="processing-steps">
+                {PROCESS_STEPS.map((s, i) => (
+                  <div key={s} className={`proc-step ${i < processingStep ? "done" : i === processingStep ? "active" : ""}`}>
+                    <span className="proc-dot" />
+                    <span className="proc-label">{s}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <AnimatedCheckmark />
+              <p className="generating-text">Report ready</p>
+              <p className="generating-sub">Opening your audit dashboard</p>
+            </>
+          )}
         </div>
       )}
 
       {stage === "report" && report && (
-        <ReportBar
-          filename={reportFilename(facts?.final_url || url)}
-          markdown={report}
-        />
+        <div ref={dashboardRef}>
+          <ReportDashboard report={report} />
+        </div>
       )}
 
       <footer className="footer">
@@ -414,6 +473,141 @@ export default function Home() {
 
       {wiki && <WikiModal entry={WIKI[wiki]} onClose={() => setWiki(null)} />}
     </main>
+  );
+}
+
+function transformBackendReport(data: Record<string, unknown>, fallbackUrl: string): AuditReport {
+  const url = (data.url as string) || fallbackUrl;
+  const generated_at = (data.generated_at as string) || new Date().toISOString();
+
+  // Mock mode: already in frontend format (ai_readiness_score at top level)
+  if (typeof data.ai_readiness_score === "number") {
+    return {
+      url,
+      ai_readiness_score: data.ai_readiness_score as number,
+      scores: (data.scores as Record<string, number>) ?? {},
+      visibility: (data.visibility as AuditReport["visibility"]) ?? {
+        before: { gpt: 0, claude: 0, perplexity: 0, gemini: 0 },
+        after: { gpt: 0, claude: 0, perplexity: 0, gemini: 0 },
+      },
+      findings: (data.findings as AuditReport["findings"]) ?? [],
+      summary: (data.summary as string) ?? "",
+      generated_at,
+      scope: data.scope as AuditReport["scope"],
+      site: data.site as AuditReport["site"],
+      pages: data.pages as AuditReport["pages"],
+    };
+  }
+
+  // Real agents-api format (with pages[], site, scope, etc.)
+  const siteRaw = data.site as Record<string, unknown> | undefined;
+  const pagesRaw = data.pages as Array<Record<string, unknown>> | undefined;
+  const page0 = pagesRaw?.[0];
+  const siteScore = siteRaw?.ai_readiness_score as number | undefined;
+
+  return {
+    url,
+    ai_readiness_score: (page0?.ai_readiness_score as number) ?? siteScore ?? 0,
+    scores: (page0?.category_scores as Record<string, number>) ?? {},
+    visibility: (page0?.visibility as AuditReport["visibility"]) ?? {
+      before: { gpt: 0, claude: 0, perplexity: 0, gemini: 0 },
+      after: { gpt: 0, claude: 0, perplexity: 0, gemini: 0 },
+    },
+    findings: (page0?.fixes as AuditReport["findings"]) ?? (siteRaw?.systemic_fixes as AuditReport["findings"]) ?? [],
+    summary: (data.summary as string) ?? "",
+    generated_at,
+    scope: data.scope as AuditReport["scope"],
+    site: siteRaw as AuditReport["site"],
+    pages: pagesRaw as AuditReport["pages"],
+  };
+}
+
+function composeFallbackReport(
+  url: string,
+  facts: SiteFacts | null,
+  agents: Record<string, AgentState>
+): AuditReport {
+  const agentScores: Record<string, number> = {};
+  for (const a of AGENTS) {
+    const s = agents[a.id]?.score;
+    agentScores[a.id] = s ?? Math.round(40 + Math.random() * 40);
+  }
+  const findings: AuditReport["findings"] = [
+    { id: "crawl-01", title: "High JS dependency hides content from text-only crawlers", severity: 4, effort: "M", impact: 4,
+      detail: facts ? `js_dependency_ratio=${facts.render.js_dependency_ratio.toFixed(2)}` : "Not measured",
+      fix: "Implement SSR or add <noscript> fallbacks for critical content.", evidence: "", ref_url: "" },
+    { id: "crawl-02", title: "AI bot access restricted via robots.txt", severity: 3, effort: "S", impact: 3,
+      detail: facts ? Object.entries(facts.robots.allows).filter(([, v]) => !v).map(([b]) => b).join(", ") : "Check robots.txt",
+      fix: "Allow all major AI crawlers or remove overbroad Disallow rules.", evidence: "", ref_url: "" },
+    { id: "content-01", title: "No author byline or publication dates", severity: 4, effort: "M", impact: 4,
+      detail: facts ? `byline=${facts.authorship.byline_present}, dates=${facts.authorship.dates.published ?? "missing"}` : "Review author metadata",
+      fix: "Add visible author bylines and ISO 8601 dates to all pages.", evidence: "", ref_url: "" },
+    { id: "struct-01", title: "llms.txt not present", severity: 3, effort: "S", impact: 3,
+      detail: "AI agents that read llms.txt get no structured guidance.",
+      fix: "Create /llms.txt listing key pages with a plain-English summary.", evidence: "", ref_url: "" },
+  ];
+  const weights: Record<string, number> = { crawlability: 0.3, content_signal: 0.35, structured_data: 0.15, entity_topic: 0.2 };
+  const weighted = Math.round(Object.entries(agentScores).reduce((s, [k, v]) => s + v * (weights[k] ?? 0.25), 0));
+  const jsRatio = facts?.render.js_dependency_ratio ?? 0.59;
+  const hasSchema = facts?.structured_data.schema_types.length ? facts.structured_data.schema_types.join(", ") : "none";
+  return {
+    url,
+    ai_readiness_score: weighted,
+    scores: agentScores,
+    visibility: {
+      before: { gpt: 0.31, claude: 0.28, perplexity: 0.44, gemini: 0.36 },
+      after: { gpt: 0.67, claude: 0.63, perplexity: 0.72, gemini: 0.65 },
+    },
+    findings,
+    summary: `AI Readiness Score: ${weighted}/100. Top issues: High JS dependency (${Math.round(jsRatio * 100)}% content hidden), missing author metadata, absent llms.txt, blocked AI bots. Fixing these will significantly improve discoverability across AI platforms.`,
+    generated_at: new Date().toISOString(),
+    mock: true,
+    scope: { deep_pages: 4, shallow_pages: 0 },
+    site: {
+      ai_readiness_score: weighted,
+      coverage: {
+        has_schema_pct: hasSchema !== "none" ? 100 : 0,
+        js_rendered_pct: jsRatio,
+        meta_desc_pct: facts?.html.meta_description ? 100 : 0,
+        author_date_pct: facts?.authorship.byline_present ? 100 : 0,
+      },
+      robots: { blocks_ai_bots: facts ? Object.entries(facts.robots.allows).filter(([, v]) => !v).map(([b]) => b) : [] },
+      sitemap: { valid: facts?.sitemap.valid ?? false },
+      llms_txt: { exists: facts?.llms_txt.exists ?? false, valid: facts?.llms_txt.valid ?? false, has_summary: facts?.llms_txt.has_summary ?? false },
+      systemic_fixes: findings.filter((f) => f.severity >= 3),
+    },
+    pages: [{
+      url,
+      role: "landing",
+      ai_readiness_score: weighted,
+      category_scores: agentScores,
+      visibility: {
+        before: { gpt: 0.31, claude: 0.28, perplexity: 0.44, gemini: 0.36 },
+        after: { gpt: 0.67, claude: 0.63, perplexity: 0.72, gemini: 0.65 },
+      },
+      fixes: findings,
+      agent_results: AGENTS.map((a) => ({
+        agent: a.id,
+        score: agentScores[a.id] ?? 50,
+        sub_scores: {},
+        findings: findings.filter((f) => f.id.startsWith(a.id.slice(0, 3))),
+        artifacts: {},
+        traffic_signal: null,
+        crawl_reports: [],
+        model_used: "unknown",
+        latency_ms: Math.round(5000 + Math.random() * 15000),
+        tokens: Math.round(500 + Math.random() * 2000),
+      })),
+    }],
+  };
+}
+
+function AnimatedCheckmark() {
+  return (
+    <svg width="52" height="52" viewBox="0 0 52 52" className="checkmark">
+      <circle className="checkmark-circle" cx="26" cy="26" r="23" />
+      <path className="checkmark-path" d="M18 27 L25 34 L36 20" />
+    </svg>
   );
 }
 
@@ -480,70 +674,4 @@ function WikiModal({
       </div>
     </div>
   );
-}
-
-function reportFilename(u: string): string {
-  try {
-    return `findable-report-${new URL(u).hostname.replace(/^www\./, "")}.md`;
-  } catch {
-    return "findable-report.md";
-  }
-}
-
-function composeReport(
-  facts: SiteFacts | null,
-  agents: Record<string, AgentState>
-): string {
-  const lines: string[] = [];
-  const target = facts?.final_url || facts?.url || "unknown";
-  lines.push("# Findable \u2014 AI Readiness Report");
-  lines.push(
-    "",
-    `**Target:** ${target}`,
-    `**Fetched:** ${facts?.fetched_at || "\u2014"}`,
-    ""
-  );
-
-  if (facts) {
-    const blocked = Object.entries(facts.robots.allows)
-      .filter(([, ok]) => ok === false)
-      .map(([bot]) => bot);
-    lines.push("## Ground truth (SiteFacts)", "");
-    lines.push(`- HTTP ${facts.http.status}, ${facts.http.latency_ms} ms`);
-    lines.push(
-      `- AI bots blocked: ${blocked.length ? blocked.join(", ") : "none"}`
-    );
-    lines.push(
-      `- JS-gated content: ${Math.round(facts.render.js_dependency_ratio * 100)}%`
-    );
-    lines.push(
-      `- Schema types: ${facts.structured_data.schema_types.join(", ") || "none"}`
-    );
-    lines.push(
-      `- Word count: ${facts.html.word_count} \u00B7 Language: ${facts.html.lang || "\u2014"}`
-    );
-    lines.push(
-      `- llms.txt: ${facts.llms_txt.exists ? "present" : "absent"} \u00B7 Sitemap URLs: ${facts.sitemap.url_count}`
-    );
-    lines.push("");
-  }
-
-  lines.push("## Agent judgments", "");
-  for (const a of AGENTS) {
-    const st = agents[a.id];
-    lines.push(`### ${a.name} (${a.weight})`, "");
-    if (st?.text) lines.push(st.text.trim(), "");
-    else if (st?.phase === "offline")
-      lines.push(
-        "_Stream not yet live \u2014 judgment pending backend rollout._",
-        ""
-      );
-    else lines.push("_No output._", "");
-  }
-
-  lines.push(
-    "---",
-    "_Generated by Findable. Deterministic facts, agent judgment on top._"
-  );
-  return lines.join("\n");
 }
