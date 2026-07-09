@@ -1,49 +1,66 @@
 ---
 type: Infrastructure
-title: vLLM GPU Server (Jupyter-hosted)
+title: vLLM GPU Server
 status: partial
-description: Remote vLLM instance running on a GPU Jupyter server, exposed to local Docker via a cloudflared or ngrok tunnel; not part of the local docker-compose stack.
-tags: [inference, vllm, gpu, cloudflared, jupyter, tunnel]
-timestamp: 2026-07-08T00:00:00Z
+description: Two remote vLLM instances (light + heavy) running on an AMD GPU server, each exposed via a separate cloudflared tunnel and consumed by the Model Router.
+tags: [inference, vllm, gpu, cloudflared, rocm, tunnel]
+timestamp: 2026-07-09T00:00:00Z
 ---
 
-# vLLM GPU Server (Jupyter-hosted)
+# vLLM GPU Server
 
-The heavy-model inference backend. Runs on a remote Jupyter notebook server with GPU access, not on the developer's local machine. The [Model Router](/components/model-router.md) reaches it via a public HTTPS tunnel.
+Two separate vLLM processes run on the AMD Radeon PRO W7900 server (48 GB VRAM), each behind its own cloudflared tunnel. The [Model Router](/components/model-router.md) selects between them based on role tier (light vs heavy).
 
-## Setup (from `agents/jupyter_vllm_setup.py`)
+## Hardware
 
-Run these steps in a Jupyter notebook on the GPU server:
+AMD Radeon PRO W7900 · 48 GB VRAM · ROCm 7.2.1 · vLLM pre-installed.
 
-```python
-# 1. Start vLLM serving the heavy model
-subprocess.Popen(["python", "-m", "vllm.entrypoints.openai.api_server",
-                  "--model", "google/gemma-4-27b-it", "--port", "8000"])
+## Models and ports
 
-# 2. Expose via cloudflared (no account required)
-proc = subprocess.Popen(["cloudflared", "tunnel", "--url", "http://localhost:8000"],
-                        stderr=subprocess.PIPE)
-# Parse tunnel URL from stderr — e.g. https://random-id.trycloudflare.com
+| Label | Model | Port | VRAM cap | env var |
+|---|---|---|---|---|
+| `light` | `google/gemma-2-2b-it` | 8000 | 10% (~4 GB) | `VLLM_LIGHT_URL` |
+| `heavy` | `google/gemma-2-9b-it` | 8001 | 58% (~27 GB) | `VLLM_URL` |
+
+Models are served with `--served-model-name light` / `--served-model-name heavy` so the model identifier in API requests is simply `"light"` or `"heavy"`.
+
+## Setup (`server_files/`)
+
+```bash
+# 1. Download models to /workspace/models/
+python server_files/download_models.py
+
+# 2. Start both vLLM servers + cloudflared tunnels
+bash server_files/serve.sh
 ```
 
-The tunnel URL becomes `VLLM_URL` in the local `.env`.
+When both servers are ready, `serve.sh` prints:
+```
+VLLM_URL=https://<heavy-tunnel>.trycloudflare.com
+# VLLM_LIGHT_URL=https://<light-tunnel>.trycloudflare.com
+```
 
-## Models served
-
-- **`LOCAL_HEAVY_MODEL`** (default: `google/gemma-4-27b-it`) — content signal, crawlability judgment, report writer.
-- **`LOCAL_MID_MODEL`** (default: `Qwen/Qwen3-14B`) — structured data, entity topic.
+Paste these into `Findable-repo/.env` and restart the agents-api container.
 
 ## Fallback behaviour
 
-If `VLLM_URL` is blank (tunnel not running), all heavy roles fall back to local Ollama automatically. The system still produces scores — at reduced quality since the light model handles all roles.
+If either URL is blank or the server is unreachable (detected at startup probe), the [Model Router](/components/model-router.md) falls through to Fireworks API → Ollama automatically. The system still produces scores at reduced quality.
 
-## Why not in docker-compose
+## Keeping the server alive
 
-The GPU server is a shared Jupyter machine, not a container the project controls. The tunnel pattern is what makes a non-containerised GPU accessible from inside a Docker network.
+```bash
+tmux new -s findable
+bash server_files/serve.sh
+# Ctrl+B then D to detach
+```
 
-## Future: local AMD ROCm
+## Load testing
 
-The original architecture called for `rocm/vllm` as a local Docker container (see [Parallel Inference decision](/decisions/parallel-inference-amd.md)). That path remains valid for AMD GPU workstations and is still the production target; the Jupyter/tunnel approach is the interim development setup.
+```bash
+python server_files/load_test.py \
+  --heavy-url https://<heavy-tunnel>.trycloudflare.com \
+  --light-url https://<light-tunnel>.trycloudflare.com
+```
 
 # Citations
 [1] [vLLM continuous batching](https://blog.vllm.ai/2023/06/20/vllm.html)

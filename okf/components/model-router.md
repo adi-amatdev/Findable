@@ -2,42 +2,64 @@
 type: Service
 title: Model Router
 status: implemented
-description: Selects which model and backend for each LLM role, with dual-backend routing (Ollama local + vLLM remote via tunnel) and Fireworks cloud fallback.
-tags: [inference, routing, failover, ollama, vllm]
-timestamp: 2026-07-08T00:00:00Z
+description: Selects which model and backend for each LLM role. Dual vLLM endpoints (heavy + light) with Fireworks cloud fallback and Ollama as last resort. Backends are probed at startup.
+tags: [inference, routing, failover, ollama, vllm, fireworks]
+timestamp: 2026-07-09T00:00:00Z
 ---
 
 # Model Router
 
 Every agent and the aggregator calls through the router. Implemented in `agents/app/models/router.py`.
 
-## Dual-backend design
+## Priority order
 
-The router reads two env vars to decide where to send requests:
+```
+vLLM (remote GPU)  →  Fireworks API (cloud)  →  Ollama (local)
+```
 
-| Env var | Purpose | Set to |
+At FastAPI startup, `probe_backends()` makes a health-check request to each configured endpoint and sets a module-level `_backend_ok` dict. The fallback chain for every role is built from this dict at call time — stale or missing URLs are silently skipped rather than crashing.
+
+## Configuration
+
+| Env var | Purpose | Default |
 |---|---|---|
-| `OLLAMA_URL` | Local Ollama — always used for light roles | `http://host.docker.internal:11434` (Docker) or `http://localhost:11434` (local) |
-| `VLLM_URL` | Remote vLLM on GPU server via cloudflared tunnel | Tunnel HTTPS URL from [vLLM server](/components/vllm-server.md). Leave blank to fall back to Ollama. |
-| `FIREWORKS_KEY` | Cloud fallback for heaviest roles | Fireworks API key |
-| `LOCAL_ONLY` | Disable all cloud calls | `1` to skip Fireworks entirely |
+| `VLLM_URL` | Heavy vLLM endpoint (cloudflared URL) | _(empty — tier skipped)_ |
+| `VLLM_LIGHT_URL` | Light vLLM endpoint (cloudflared URL) | _(empty — tier skipped)_ |
+| `VLLM_HEAVY_MODEL_NAME` | `--served-model-name` on heavy server | `heavy` |
+| `VLLM_LIGHT_MODEL_NAME` | `--served-model-name` on light server | `light` |
+| `FIREWORKS_KEY` | Fireworks API key | _(empty — tier skipped)_ |
+| `FIREWORKS_HEAVY_MODEL` | Fireworks model for heavy roles | `accounts/fireworks/models/gemma-4-27b-it` |
+| `FIREWORKS_LIGHT_MODEL` | Fireworks model for light roles | `accounts/fireworks/models/gemma-4-e4b-it` |
+| `OLLAMA_URL` | Local Ollama | `http://localhost:11434` |
+| `LOCAL_LIGHT_MODEL` | Ollama model for light roles | `gemma4:e2b` |
+| `LOCAL_HEAVY_MODEL` | Ollama model for heavy roles | `gemma4:e2b` |
+| `LOCAL_ONLY` | Strip Fireworks from all chains | `0` |
 
-## Role assignments
+## Role → tier mapping
 
-| Role | Backend chain |
-|---|---|
-| Orchestrator, crawlability sub-agent | Ollama (light model: `LOCAL_LIGHT_MODEL`) |
-| Crawlability judgment, structured data, entity topic | vLLM heavy → vLLM mid → Ollama light → Fireworks |
-| Content Signal (E-E-A-T), report writer | vLLM heavy → Ollama light → Fireworks |
+| Role | Tier | Primary backend |
+|---|---|---|
+| `orchestrator` | light | `VLLM_LIGHT_URL` / `light` |
+| `crawlability_subagent` | light | `VLLM_LIGHT_URL` / `light` |
+| `structured_data` | light | `VLLM_LIGHT_URL` / `light` |
+| `entity_topic` | light | `VLLM_LIGHT_URL` / `light` |
+| `crawlability_judgment` | heavy | `VLLM_URL` / `heavy` |
+| `content_signal` | heavy | `VLLM_URL` / `heavy` |
+| `report_writer` | heavy | `VLLM_URL` / `heavy` |
 
-If `VLLM_URL` is blank, all heavy roles fall back to Ollama — the system runs fully local at reduced quality.
+## Current GPU models (server_files/serve.sh)
 
-## Failover
+- **Light** (`VLLM_LIGHT_URL`): `google/gemma-2-2b-it`, served as `light`
+- **Heavy** (`VLLM_URL`): `google/gemma-2-9b-it`, served as `heavy`
 
-Within the heavy chain: `HEAVY_MODEL` → `MID_MODEL` → `LIGHT_MODEL` → Fireworks (if key present). Each attempt uses the same OpenAI-compatible endpoint format; only the base URL and model string change.
+## Failover behaviour
+
+`call_with_fallback(role, ...)` iterates the chain left to right. It catches `httpx.HTTPStatusError` (4xx/5xx) and `httpx.TransportError` (ConnectError, TimeoutException, etc.) — both trigger the next backend. Any other exception propagates immediately.
+
+If all backends fail for a role, a `RuntimeError` is raised with a message listing all attempted models.
 
 ## Backends
 
-- **Ollama** — always local; light roles go here unconditionally.
-- **vLLM (remote)** — GPU server running on a Jupyter notebook machine, exposed via [cloudflared tunnel](/components/vllm-server.md). Heavy roles go here when `VLLM_URL` is set.
-- **[Fireworks](/external/fireworks-api.md)** — cloud fallback. Disabled when `LOCAL_ONLY=1`.
+- **vLLM (remote)** — two separate cloudflared tunnels, one per model size. See [vLLM server](/components/vllm-server.md).
+- **[Fireworks](/external/fireworks-api.md)** — cloud fallback. Disabled when `LOCAL_ONLY=1` or `FIREWORKS_KEY` is empty.
+- **Ollama** — local last resort. Probed at `/api/tags`.

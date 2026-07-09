@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -20,6 +21,7 @@ from app.agents.content_signal import ContentSignalAgent
 from app.agents.crawlability.agent import run_crawlability_agent
 from app.agents.entity_topic import EntityTopicAgent
 from app.agents.structured_data import StructuredDataAgent
+import app.models.router as router_module
 from app.report.aggregator import aggregate
 from app.schemas import AgentResult, AuditReport, AuditStartRequest, SiteFacts
 import app.state as state
@@ -27,7 +29,16 @@ import app.state as state
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="Agents SEO — Inference Layer", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    availability = await router_module.probe_backends()
+    available = [k for k, v in availability.items() if v]
+    log.info("Model backends ready: %s", available or ["none — all requests will fail"])
+    yield
+
+
+app = FastAPI(title="Agents SEO — Inference Layer", version="0.1.0", lifespan=lifespan)
 
 
 async def _run_agents(sitefacts: SiteFacts) -> list[AgentResult]:

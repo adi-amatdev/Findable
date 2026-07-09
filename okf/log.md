@@ -1,5 +1,8 @@
 # Update Log
 
+## 2026-07-09 (model router update)
+* **Update**: Model router refactored for dual vLLM URLs. Split `VLLM_URL` (heavy, gemma-2-9b-it) + `VLLM_LIGHT_URL` (light, gemma-2-2b-it). Priority order changed to vLLM → Fireworks → Ollama. Startup probe (`probe_backends()`) replaces module-level flag. Fireworks models now configurable via env vars. Role→tier mapping: light roles = orchestrator, crawlability_subagent, structured_data, entity_topic; heavy roles = crawlability_judgment, content_signal, report_writer. `components/model-router.md` and `components/vllm-server.md` updated.
+
 ## 2026-07-09
 * **Update**: Frontend promoted from `partial` to `implemented`. Full stage flow (idle → crawling → judging → generating → report) with anime.js transitions. ReportDashboard component with animated score gauge, category bars, visibility estimate, findings list, site coverage, per-agent results, and knowledge graph. Cancel button with AbortController. Fallback report composer from SSE scores. Polling with 202 retry for report readiness. `components/frontend.md` rewritten.
 * **Update**: `data/audit-report.md` promoted from `planned` to `implemented`. Schema updated to reflect the actual flattened format with optional nested fields. `data/agent-result.md` promoted from `contract` to `implemented` with full TypeScript types, agent-specific artifacts, and implementation status across mock/real/fallback paths.
