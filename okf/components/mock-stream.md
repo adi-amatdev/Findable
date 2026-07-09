@@ -62,7 +62,9 @@ Fires four coroutines in parallel via `asyncio.gather`, one per agent. Each coro
 | `structured_data` | started → building_prompt → llm_call → parsing_result → complete | ~2.5 s |
 | `entity_topic` | started → building_prompt → llm_call → parsing_result → complete | ~4.2 s |
 
-Report becomes available at ~6 s (a small buffer after the last agent).
+### Report timing
+
+`_REPORT_DELAY` in `app/mock.py` controls when the mock report is stored (default **4.0 s**). The report must be stored before the frontend polls `GET /api/audit/{audit_id}` at ~5.5 s (when the last SSE `complete` event fires). If the frontend receives `202 {"status":"running"}` (report not ready yet), it retries up to 10 times at 1.5 s intervals.
 
 ### SSE generator (`sse_stream`)
 

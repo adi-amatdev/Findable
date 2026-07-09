@@ -1,22 +1,22 @@
 ---
 type: Decision
-title: Frontend Choice (Next.js vs Native.Builder)
-description: Open decision between Next.js (reference stack) and Native.Builder (team learning curve); the API contract is identical for both.
-status: planned
-tags: [decision, frontend, open]
-timestamp: 2026-07-08T00:00:00Z
+title: Frontend Choice (Next.js chosen over Native.Builder)
+description: Next.js 13.5 (App Router) was chosen as the frontend framework. The API contract is framework-agnostic.
+status: implemented
+tags: [decision, frontend, nextjs]
+timestamp: 2026-07-09T00:00:00Z
 ---
 
 # Frontend Choice
 
-## Status: open (as of architecture doc)
+## Decision: Next.js
 
-The team is learning Native.Builder. Next.js is the fallback and the reference stack used in this document. The actual choice is based on how the Native.Builder learning curve feels by Thursday of the build week.
+The frontend was built with **Next.js 13.5 (App Router)** on Node.js 16. Native.Builder was evaluated but the team chose Next.js for familiarity and the faster iteration cycle given the hackathon timeline.
+
+## What the implementation uses
+
+[Next.js + React](/components/frontend.md) in `frontend/` — single-page dashboard with plain CSS + anime.js for motion. No chart or CSS frameworks. The [ReportDashboard](https://github.com/anomalyco/Findable/frontend/components/ReportDashboard.tsx) component handles all report rendering without external visualization libraries.
 
 ## What's frozen regardless
 
-The [API surface](/components/api.md) — four routes, SSE stream — is identical for both frontends. Whichever is chosen, the backend does not change.
-
-## What the reference implementation uses
-
-[Next.js + React](/components/frontend.md), Recharts for the radar chart, react-flow for the knowledge graph.
+The [API surface](/components/api.md) — `POST /api/sitefacts`, `POST /api/audit/start`, `GET /agent/stream/{agent_id}`, `GET /api/audit/{audit_id}` — is framework-agnostic. The frontend choice has no effect on the backend architecture.
