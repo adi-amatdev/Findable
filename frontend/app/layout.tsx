@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Findable — AI Readiness Audit",
+  title: "Findable",
   description: "See how AI crawlers read your page. URL in, SiteFacts out.",
 };
 

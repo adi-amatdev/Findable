@@ -345,6 +345,12 @@ export default function Home() {
     <main className={`stage-${stage}`}>
       <LivingBackground />
 
+      <a className="brand" href="/" aria-label="Findable home">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="brand-mark" src="/logo.svg" alt="Findable logo" width={32} height={32} />
+        <span className="brand-name"></span>
+      </a>
+
       <section className={`hero2 ${compact ? "compact" : ""}`}>
         <h1>Findable</h1>
         <p className="tagline">
