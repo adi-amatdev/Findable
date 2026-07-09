@@ -39,8 +39,8 @@ log = logging.getLogger(__name__)
 # Backend config from environment
 # ---------------------------------------------------------------------------
 
-VLLM_HEAVY_BASE       = os.getenv("VLLM_URL", "").rstrip("/")
-VLLM_LIGHT_BASE       = os.getenv("VLLM_LIGHT_URL", "").rstrip("/")
+VLLM_HEAVY_BASE       = os.getenv("VLLM_URL", "").strip().rstrip("/")
+VLLM_LIGHT_BASE       = os.getenv("VLLM_LIGHT_URL", "").strip().rstrip("/")
 VLLM_HEAVY_MODEL_NAME = os.getenv("VLLM_HEAVY_MODEL_NAME", "heavy")
 VLLM_LIGHT_MODEL_NAME = os.getenv("VLLM_LIGHT_MODEL_NAME", "light")
 

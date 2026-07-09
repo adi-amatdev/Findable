@@ -24,6 +24,7 @@ from ..crawl.firecrawl import FirecrawlClient, FirecrawlError
 from .. import mock as mock_state
 from ..models.api_models import ScrapeRequest, SiteFactsRequest
 from ..models.contracts import SiteFacts
+from ..pdf import build_pdf
 from ..pipeline import SiteFactsPipeline
 from .deps import get_firecrawl, get_pipeline
 
@@ -232,6 +233,64 @@ async def audit_result_proxy(
         )
     except httpx.RequestError as exc:
         raise HTTPException(status_code=502, detail=f"Could not reach agents-api: {exc}")
+
+
+@router.get("/api/audit/{audit_id}/pdf", tags=["report"])
+async def audit_pdf(
+    audit_id: str,
+    settings: Settings = Depends(get_settings),
+):
+    """Generate and return a verbose PDF report for the given audit.
+
+    Works for both mock-stream audits (in-process result store) and
+    real agents-api audits (proxied from agents-api).
+    """
+    if settings.mock_stream:
+        report_data = mock_state.get_result(audit_id)
+        if report_data is None:
+            raise HTTPException(status_code=202, detail="Audit still running")
+    else:
+        if not settings.agents_url:
+            raise HTTPException(status_code=503, detail="AGENTS_URL not configured")
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{settings.agents_url.rstrip('/')}/audit/{audit_id}/result"
+                )
+                if resp.status_code == 202:
+                    raise HTTPException(status_code=202, detail="Audit still running")
+                resp.raise_for_status()
+                report_data = resp.json()
+        except HTTPException:
+            raise
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"agents-api returned {exc.response.status_code}: {exc.response.text[:200]}",
+            )
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail=f"Could not reach agents-api: {exc}")
+
+    try:
+        pdf_bytes = build_pdf(report_data)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}")
+
+    url = report_data.get("url", audit_id) if isinstance(report_data, dict) else audit_id
+    try:
+        from urllib.parse import urlparse
+        safe_name = urlparse(url).hostname or audit_id
+    except Exception:
+        safe_name = audit_id
+
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="findable-{safe_name}.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
+        },
+    )
 
 
 @router.post("/scrape", tags=["debug"])

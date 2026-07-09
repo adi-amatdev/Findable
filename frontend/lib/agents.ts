@@ -18,13 +18,13 @@ export const AGENTS: AgentMeta[] = [
     id: "content_signal",
     name: "Content Signal",
     role: "Is it worth citing? Experience, expertise, authority, trust.",
-    weight: "30%",
+    weight: "35%",
   },
   {
     id: "structured_data",
     name: "Structured Data",
     role: "Can a machine extract the facts? schema.org, llms.txt, meta.",
-    weight: "20%",
+    weight: "15%",
   },
   {
     id: "entity_topic",

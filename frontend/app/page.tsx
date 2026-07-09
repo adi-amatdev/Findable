@@ -38,11 +38,11 @@ const WIKI: Record<string, WikiEntry> = {
         body: "The raw vs rendered text-length ratio is the most revealing signal in the audit. If raw is much shorter than rendered, content is gated behind JavaScript — invisible to AI crawlers that don't execute JS.",
       },
       {
-        heading: "Three tiers",
+        heading: "What is collected",
         stats: [
-          ["Landing", "Full audit — crawl, extract, 4 judges"],
-          ["Deep pages", "Same treatment for ~4 follow-up pages"],
-          ["Site-wide", "Deterministic scan of ~50 pages for coverage"],
+          ["Rendered HTML", "Firecrawl renders the page as a headless browser"],
+          ["Raw source", "Direct HTTP fetch captures what search bots actually see"],
+          ["Support files", "robots.txt, sitemap.xml, and llms.txt fetched in parallel"],
         ],
       },
     ],
@@ -58,11 +58,11 @@ const WIKI: Record<string, WikiEntry> = {
       {
         heading: "What is extracted",
         stats: [
-          ["JS dependency", "1 - raw / rendered text length"],
-          ["Schema.org", "JSON-LD, Microdata, RDFa validation"],
+          ["JS dependency", "1 - raw / rendered text length ratio"],
+          ["Schema.org", "JSON-LD detection and type validation"],
           ["Meta", "Title, description, OG, Twitter cards"],
           ["Robots", "Per-bot allow/deny for 6 AI crawlers"],
-          ["Entities", "Named entity recognition"],
+          ["Entities", "Named entity heuristics from page text"],
           ["Links", "Internal, external, citation graph"],
         ],
       },
@@ -347,8 +347,8 @@ export default function Home() {
 
       <a className="brand" href="/" aria-label="Findable home">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="brand-mark" src="/logo.svg" alt="Findable logo" width={32} height={32} />
-        <span className="brand-name"></span>
+        <img className="brand-mark" src="/mark.svg" alt="Findable logo" width={32} height={32} />
+        <span className="brand-name">Findable</span>
       </a>
 
       <section className={`hero2 ${compact ? "compact" : ""}`}>
@@ -481,7 +481,7 @@ export default function Home() {
 
       {stage === "report" && report && (
         <div ref={dashboardRef}>
-          <ReportDashboard report={report} />
+          <ReportDashboard report={report} auditId={auditIdRef.current ?? undefined} />
         </div>
       )}
 
@@ -543,6 +543,70 @@ function transformBackendReport(data: Record<string, unknown>, fallbackUrl: stri
   };
 }
 
+function estimateVisibility(facts: SiteFacts | null): AuditReport["visibility"] {
+  if (!facts) {
+    return {
+      before: { gpt: 0.35, claude: 0.32, perplexity: 0.35, gemini: 0.35 },
+      after:  { gpt: 0.70, claude: 0.68, perplexity: 0.72, gemini: 0.70 },
+    };
+  }
+
+  const f = facts; // narrow: TypeScript can't narrow captured vars in closures
+
+  const botField: Record<string, string> = {
+    gpt: "GPTBot",
+    claude: "ClaudeBot",
+    perplexity: "PerplexityBot",
+    gemini: "Google-Extended",
+  };
+
+  function baseScore(botKey: string): number {
+    const allows = f.robots.allows as Record<string, boolean>;
+    if (allows[botField[botKey]] === false) return 0.05;
+
+    let s = 1.0;
+    const js = f.render?.js_dependency_ratio ?? 0;
+    if (js > 0.9) s *= 0.10;
+    else if (js > 0.7) s *= 0.35;
+    else if (js > 0.5) s *= 0.60;
+
+    if ((f.http?.status ?? 200) >= 400) return 0.0;
+    if ((f.http?.status ?? 200) >= 300) s *= 0.80;
+
+    const lat = f.http?.latency_ms ?? 0;
+    if (lat > 5000) s *= 0.70;
+    else if (lat > 3000) s *= 0.85;
+
+    if (f.sitemap?.valid) s = Math.min(1, s * 1.06);
+    const wc = f.html?.word_count ?? 0;
+    if (wc < 100) s *= 0.40;
+    else if (wc < 200) s *= 0.70;
+    if ((f.structured_data?.schema_types?.length ?? 0) > 0) s = Math.min(1, s * 1.05);
+    if (f.llms_txt?.valid && (botKey === "claude" || botKey === "perplexity"))
+      s = Math.min(1, s * 1.03);
+
+    return Math.max(0, Math.min(1, s));
+  }
+
+  function afterScore(botKey: string): number {
+    const newJs = Math.max(0, (f.render?.js_dependency_ratio ?? 0) - 0.65);
+    let s = 1.0;
+    if (newJs > 0.9) s *= 0.10;
+    else if (newJs > 0.7) s *= 0.35;
+    else if (newJs > 0.5) s *= 0.60;
+    s = Math.min(1, s * 1.06); // sitemap fixed
+    s = Math.min(1, s * 1.05); // schema added
+    if (f.llms_txt?.valid && (botKey === "claude" || botKey === "perplexity"))
+      s = Math.min(1, s * 1.03);
+    return Math.max(0, Math.min(1, s));
+  }
+
+  const keys = ["gpt", "claude", "perplexity", "gemini"] as const;
+  const before = Object.fromEntries(keys.map((k) => [k, baseScore(k)])) as unknown as AuditReport["visibility"]["before"];
+  const after  = Object.fromEntries(keys.map((k) => [k, Math.max(before[k], afterScore(k))])) as unknown as AuditReport["visibility"]["after"];
+  return { before, after };
+}
+
 function composeFallbackReport(
   url: string,
   facts: SiteFacts | null,
@@ -551,7 +615,7 @@ function composeFallbackReport(
   const agentScores: Record<string, number> = {};
   for (const a of AGENTS) {
     const s = agents[a.id]?.score;
-    agentScores[a.id] = s ?? Math.round(40 + Math.random() * 40);
+    agentScores[a.id] = s ?? 50; // neutral default — never random
   }
   const findings: AuditReport["findings"] = [
     { id: "crawl-01", title: "High JS dependency hides content from text-only crawlers", severity: 4, effort: "M", impact: 4,
@@ -571,14 +635,12 @@ function composeFallbackReport(
   const weighted = Math.round(Object.entries(agentScores).reduce((s, [k, v]) => s + v * (weights[k] ?? 0.25), 0));
   const jsRatio = facts?.render.js_dependency_ratio ?? 0.59;
   const hasSchema = facts?.structured_data.schema_types.length ? facts.structured_data.schema_types.join(", ") : "none";
+  const vis = estimateVisibility(facts);
   return {
     url,
     ai_readiness_score: weighted,
     scores: agentScores,
-    visibility: {
-      before: { gpt: 0.31, claude: 0.28, perplexity: 0.44, gemini: 0.36 },
-      after: { gpt: 0.67, claude: 0.63, perplexity: 0.72, gemini: 0.65 },
-    },
+    visibility: vis,
     findings,
     summary: `AI Readiness Score: ${weighted}/100. Top issues: High JS dependency (${Math.round(jsRatio * 100)}% content hidden), missing author metadata, absent llms.txt, blocked AI bots. Fixing these will significantly improve discoverability across AI platforms.`,
     generated_at: new Date().toISOString(),
@@ -602,10 +664,7 @@ function composeFallbackReport(
       role: "landing",
       ai_readiness_score: weighted,
       category_scores: agentScores,
-      visibility: {
-        before: { gpt: 0.31, claude: 0.28, perplexity: 0.44, gemini: 0.36 },
-        after: { gpt: 0.67, claude: 0.63, perplexity: 0.72, gemini: 0.65 },
-      },
+      visibility: vis,
       fixes: findings,
       agent_results: AGENTS.map((a) => ({
         agent: a.id,
@@ -616,8 +675,8 @@ function composeFallbackReport(
         traffic_signal: null,
         crawl_reports: [],
         model_used: "unknown",
-        latency_ms: Math.round(5000 + Math.random() * 15000),
-        tokens: Math.round(500 + Math.random() * 2000),
+        latency_ms: 0,
+        tokens: 0,
       })),
     }],
   };

@@ -1,5 +1,14 @@
 # Update Log
 
+## 2026-07-09 (frontend + pdf + docker fixes)
+* **Update**: PDF export implemented. `app/pdf.py` added — `fpdf2`-based backend generator with Latin-1 sanitiser (`_s()`), dual-format normaliser (mock/real), colour-coded score, visibility table with multipliers, verbose findings. `GET /api/audit/{audit_id}/pdf` endpoint streams `application/pdf`. `fpdf2>=2.7` added to `pyproject.toml`. `components/pdf-export.md` rewritten from `planned`/Playwright to `implemented`/fpdf2.
+* **Update**: Frontend score colours fixed. Category score bars now use score-based colours (red/amber/green) instead of hardwired per-agent colours. Agent result card borders also score-based. Agent column footer no longer displays intermediate score percentages.
+* **Update**: Homepage copy audited and corrected. Brand name "Findable" added to header. WIKI "Three tiers" replaced with accurate "What is collected" (deep-pages/site-wide tiers are not built). WIKI Facts schema description corrected to "JSON-LD detection" (Microdata/RDFa not implemented).
+* **Update**: Logo fixed. SVG moved to `public/mark.svg` (avoids Next.js App Router `icon.svg` reservation). Fixed `width="100%"` → `width="912" height="936"` for correct `<img>` rendering. Outer background path set to `transparent` so gold mark is visible on dark background.
+* **Update**: Docker build fixed. API `Dockerfile` switched from `uv sync --frozen` (stale lockfile missing `fpdf2`) to direct `pip install` of all `pyproject.toml` deps. Frontend `Dockerfile` runner stage now copies `public/` directory (required in Next.js standalone output mode — was silently omitting all public assets).
+* **Update**: TypeScript build errors fixed. `estimateVisibility()` closure narrowing: rebind `facts` to `const f` after null guard. `Object.fromEntries` cast routed through `unknown` for `VisibilityEstimate` type.
+* **Update**: `components/frontend.md` deviations section updated for all above.
+
 ## 2026-07-09 (model router update)
 * **Update**: Model router refactored for dual vLLM URLs. Split `VLLM_URL` (heavy, gemma-2-9b-it) + `VLLM_LIGHT_URL` (light, gemma-2-2b-it). Priority order changed to vLLM → Fireworks → Ollama. Startup probe (`probe_backends()`) replaces module-level flag. Fireworks models now configurable via env vars. Role→tier mapping: light roles = orchestrator, crawlability_subagent, structured_data, entity_topic; heavy roles = crawlability_judgment, content_signal, report_writer. `components/model-router.md` and `components/vllm-server.md` updated.
 

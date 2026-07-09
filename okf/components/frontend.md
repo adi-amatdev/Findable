@@ -63,7 +63,10 @@ When the audit result API returns an error (or the report isn't ready after max 
 - Per-agent **streaming text columns with skeletons** replace the spinner list.
 - Stream path is `GET /agent/stream/{agent_id}` rather than `/api/audit/{id}/events`.
 - Score card / radar / knowledge-graph panels are deferred until the [Aggregator](/components/aggregator.md) returns a real [AuditReport](/data/audit-report.md). The dashboard renders findings, scores, visibility, coverage, and agent results.
-- PDF export is client-side `window.print()` for now; `GET /api/audit/{id}/report.pdf` ([PDF Export](/components/pdf-export.md)) remains the target.
+- PDF export is implemented as `GET /api/audit/{audit_id}/pdf` via [PDF Export](/components/pdf-export.md) — backend-generated with `fpdf2`, streamed directly to browser. Falls back to `window.print()` when no `auditId` is available.
+- Agent column footer **does not show a score percentage** — intermediate SSE scores are used internally for the fallback report but are not displayed to avoid misrepresentation before the full audit completes.
+- Category score bars use **score-based colours** (red <50, amber 50–79, green ≥80) rather than fixed per-agent colours.
+- Logo served from `public/mark.svg` (not `icon.svg` — Next.js App Router reserves that filename as the favicon metadata route).
 
 ## Live demo notes
 

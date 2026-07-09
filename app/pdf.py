@@ -1,0 +1,411 @@
+"""
+PDF report generator for Findable AI Readiness Audits.
+
+Accepts a raw AuditReport dict (either mock/flat format or real agents-api format)
+and returns a bytes object containing a fully self-contained PDF.
+
+Formatting principles:
+  - Helvetica throughout — zero external font dependencies
+  - A4 page size, 18 mm margins
+  - Gold rule (#D4AF37) for section dividers
+  - Colour-coded severity: Critical=#C44A4A, High=#D4A030, Medium=#B8860B, Low=#2E7D32
+  - All findings printed verbatim (detail, recommendation, evidence, reference)
+  - Visibility table includes multiplier and avg improvement summary line
+"""
+
+from __future__ import annotations
+
+import io
+from datetime import datetime
+from typing import Any
+
+from fpdf import FPDF
+
+# ---------------------------------------------------------------------------
+# Latin-1 sanitiser — Helvetica core font is limited to Latin-1
+# ---------------------------------------------------------------------------
+
+_REPLACE = {
+    "—": "-",  # em dash
+    "–": "-",  # en dash
+    "‘": "'",  # left single quote
+    "’": "'",  # right single quote
+    "“": '"',  # left double quote
+    "”": '"',  # right double quote
+    "•": "*",  # bullet
+    "×": "x",  # multiplication sign
+    "→": "->", # right arrow
+    "…": "...",# ellipsis
+    " ": " ",  # non-breaking space
+}
+
+def _s(text: str) -> str:
+    """Sanitise string to Latin-1 safe characters."""
+    for src, dst in _REPLACE.items():
+        text = text.replace(src, dst)
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
+# ---------------------------------------------------------------------------
+# Colours
+# ---------------------------------------------------------------------------
+
+GOLD   = (212, 175, 55)
+BLACK  = (26,  26,  26)
+GREY   = (100, 100, 100)
+LIGHT  = (245, 245, 245)
+BORDER = (220, 220, 220)
+GOOD   = (46,  125,  50)
+WARN   = (180, 130,  30)
+BAD    = (196,  74,  74)
+WHITE  = (255, 255, 255)
+
+AGENT_NAMES = {
+    "crawlability":    "Crawlability",
+    "content_signal":  "Content Signal",
+    "structured_data": "Structured Data",
+    "entity_topic":    "Entity & Topic",
+}
+
+WEIGHTS = {
+    "crawlability":    "30%",
+    "content_signal":  "35%",
+    "structured_data": "15%",
+    "entity_topic":    "20%",
+}
+
+EFFORT_LABEL = {"S": "Quick fix", "M": "Moderate", "L": "Large"}
+
+
+# ---------------------------------------------------------------------------
+# Normalise — handle both mock (flat) and real (nested) AuditReport shapes
+# ---------------------------------------------------------------------------
+
+def _normalise(data: dict[str, Any]) -> dict[str, Any]:
+    if "ai_readiness_score" in data:
+        # Mock / frontend-flat format
+        return {
+            "url":          data.get("url", ""),
+            "generated_at": data.get("generated_at", ""),
+            "summary":      data.get("summary", ""),
+            "score":        int(data["ai_readiness_score"]),
+            "scores":       data.get("scores", {}),
+            "visibility":   data.get("visibility", {}),
+            "findings":     data.get("findings", []),
+        }
+
+    # Real agents-api format (pages[], site, scope)
+    page0     = (data.get("pages") or [{}])[0]
+    site      = data.get("site") or {}
+    score     = page0.get("ai_readiness_score") or site.get("ai_readiness_score") or 0
+    findings  = page0.get("fixes") or site.get("systemic_fixes") or []
+    vis_raw   = page0.get("visibility") or {}
+
+    return {
+        "url":          data.get("url", ""),
+        "generated_at": data.get("generated_at", ""),
+        "summary":      data.get("summary", ""),
+        "score":        int(score),
+        "scores":       page0.get("category_scores") or {},
+        "visibility":   vis_raw,
+        "findings":     findings,
+    }
+
+
+# ---------------------------------------------------------------------------
+# PDF builder
+# ---------------------------------------------------------------------------
+
+class _PDF(FPDF):
+    def __init__(self, url: str, generated_at: str):
+        super().__init__(orientation="P", unit="mm", format="A4")
+        self._report_url    = url
+        self._generated_at  = generated_at
+        self.set_margins(18, 18, 18)
+        self.set_auto_page_break(auto=True, margin=16)
+
+    def header(self):
+        self.set_font("Helvetica", "B", 8)
+        self.set_text_color(*GREY)
+        self.cell(0, 6, "FINDABLE - AI READINESS AUDIT", align="R")
+        self.ln(1)
+        self.set_draw_color(*GOLD)
+        self.set_line_width(0.4)
+        self.line(self.l_margin, self.get_y(), 210 - self.r_margin, self.get_y())
+        self.ln(3)
+        self.set_text_color(*BLACK)
+        self.set_draw_color(*BORDER)
+
+    def footer(self):
+        self.set_y(-12)
+        self.set_font("Helvetica", "", 7)
+        self.set_text_color(*GREY)
+        self.cell(0, 6, f"Page {self.page_no()}  |  Generated by Findable", align="C")
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _rule(self, color=BORDER):
+        self.set_draw_color(*color)
+        self.set_line_width(0.25)
+        self.line(self.l_margin, self.get_y(), 210 - self.r_margin, self.get_y())
+        self.set_draw_color(*BORDER)
+        self.ln(3)
+
+    def _section_title(self, text: str):
+        self.ln(4)
+        self.set_font("Helvetica", "B", 10)
+        self.set_text_color(*GOLD)
+        self.cell(0, 6, text.upper(), ln=1)
+        self._rule(GOLD)
+        self.set_text_color(*BLACK)
+
+    def _kv(self, key: str, value: str, indent: float = 0):
+        self.set_font("Helvetica", "B", 9)
+        self.set_text_color(*GREY)
+        self.set_x(self.l_margin + indent)
+        self.cell(32, 5, key + ":", ln=0)
+        self.set_font("Helvetica", "", 9)
+        self.set_text_color(*BLACK)
+        self.multi_cell(0, 5, value)
+
+    def _body(self, text: str, size: int = 9):
+        self.set_font("Helvetica", "", size)
+        self.set_text_color(*BLACK)
+        self.multi_cell(0, 5, _s(text))
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+def build_pdf(raw: dict[str, Any]) -> bytes:
+    """Return PDF bytes for the given AuditReport dict."""
+    d = _normalise(raw)
+
+    url          = d["url"]
+    generated_at = d["generated_at"]
+    summary      = d["summary"]
+    score        = d["score"]
+    scores       = d["scores"]       # {agent_id: int}
+    visibility   = d["visibility"]   # {before: {gpt,...}, after: {gpt,...}}
+    findings     = d["findings"]
+
+    try:
+        dt = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        date_str = dt.strftime("%d %b %Y  %H:%M UTC")
+    except Exception:
+        date_str = generated_at or "-"
+
+    pdf = _PDF(url, date_str)
+    pdf.add_page()
+
+    # ── Title block ──────────────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(*BLACK)
+    pdf.cell(0, 10, "AI Readiness Audit Report", ln=1)
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(*GREY)
+    pdf.cell(0, 5, _s(f"Target: {url}"), ln=1)
+    pdf.cell(0, 5, _s(f"Date: {date_str}"), ln=1)
+    pdf.ln(2)
+
+    # ── Overall score ─────────────────────────────────────────────────────────
+    pdf._rule(GOLD)
+    tone = GOOD if score >= 80 else WARN if score >= 50 else BAD
+    pdf.set_font("Helvetica", "B", 42)
+    pdf.set_text_color(*tone)
+    pdf.cell(28, 16, str(score), ln=0, align="R")
+    pdf.set_font("Helvetica", "", 14)
+    pdf.set_text_color(*GREY)
+    pdf.cell(14, 16, " / 100", ln=0, align="L")
+    pdf.set_font("Helvetica", "", 10)
+    if score >= 80:
+        verdict = "Well optimised for AI discovery."
+    elif score >= 50:
+        verdict = "Moderate AI readiness - improvements recommended."
+    else:
+        verdict = "Poor AI readiness - critical issues present."
+    pdf.set_text_color(*BLACK)
+    pdf.set_x(60)
+    pdf.multi_cell(0, 8, verdict)
+    pdf.ln(2)
+
+    # ── Executive summary ─────────────────────────────────────────────────────
+    if summary:
+        pdf._section_title("Executive Summary")
+        pdf._body(summary, size=9)
+        pdf.ln(2)
+
+    # ── Category scores ───────────────────────────────────────────────────────
+    if scores:
+        pdf._section_title("Category Scores")
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_fill_color(*LIGHT)
+        pdf.set_text_color(*GREY)
+        W = 210 - pdf.l_margin - pdf.r_margin
+        pdf.cell(W * 0.55, 6, "Category", border=0, fill=True)
+        pdf.cell(W * 0.20, 6, "Weight", border=0, fill=True, align="C")
+        pdf.cell(W * 0.25, 6, "Score", border=0, fill=True, align="R", ln=1)
+        pdf._rule()
+        for agent_id, s in scores.items():
+            name = AGENT_NAMES.get(agent_id, agent_id)
+            weight = WEIGHTS.get(agent_id, "")
+            tone = GOOD if s >= 80 else WARN if s >= 50 else BAD
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_text_color(*BLACK)
+            pdf.cell(W * 0.55, 6, name)
+            pdf.set_text_color(*GREY)
+            pdf.cell(W * 0.20, 6, weight, align="C")
+            pdf.set_text_color(*tone)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(W * 0.25, 6, f"{s} / 100", align="R", ln=1)
+        pdf.ln(2)
+
+    # ── Visibility analysis ────────────────────────────────────────────────────
+    vis_before = visibility.get("before") or {}
+    vis_after  = visibility.get("after")  or {}
+    if vis_before and vis_after:
+        pdf._section_title("Visibility Analysis")
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(*GREY)
+        pdf.multi_cell(
+            0, 4,
+            "Estimated probability each AI model finds and cites this page - "
+            "before applying the top recommendations, and after.",
+        )
+        pdf.ln(2)
+
+        W = 210 - pdf.l_margin - pdf.r_margin
+        PLATFORM_LABELS = {
+            "gpt": "GPT-4o (ChatGPT Search)",
+            "claude": "Claude",
+            "perplexity": "Perplexity",
+            "gemini": "Gemini",
+        }
+
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_fill_color(*LIGHT)
+        pdf.set_text_color(*GREY)
+        pdf.cell(W * 0.40, 6, "Platform", fill=True)
+        pdf.cell(W * 0.18, 6, "Before", fill=True, align="R")
+        pdf.cell(W * 0.18, 6, "After", fill=True, align="R")
+        pdf.cell(W * 0.24, 6, "Improvement", fill=True, align="R", ln=1)
+        pdf._rule()
+
+        mults = []
+        for key in ("gpt", "claude", "perplexity", "gemini"):
+            b = float(vis_before.get(key, 0))
+            a = float(vis_after.get(key, 0))
+            mult = a / b if b > 0 else None
+            if mult is not None:
+                mults.append(mult)
+            mult_str = f"{mult:.1f}x" if mult is not None else "N/A"
+            label = PLATFORM_LABELS.get(key, key)
+
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_text_color(*BLACK)
+            pdf.cell(W * 0.40, 6, label)
+            pdf.set_text_color(*GREY)
+            pdf.cell(W * 0.18, 6, f"{b*100:.0f}%", align="R")
+            pdf.set_text_color(*GOOD)
+            pdf.cell(W * 0.18, 6, f"{a*100:.0f}%", align="R")
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_text_color(*GOOD)
+            pdf.cell(W * 0.24, 6, mult_str, align="R", ln=1)
+
+        if mults:
+            avg = sum(mults) / len(mults)
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_text_color(*GOOD)
+            pdf.cell(0, 5, f"Average improvement: {avg:.1f}x across all AI platforms", align="R", ln=1)
+        pdf.ln(2)
+
+    # ── Findings ──────────────────────────────────────────────────────────────
+    if findings:
+        pdf._section_title(f"Findings ({len(findings)})")
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(*GREY)
+        pdf.multi_cell(
+            0, 4,
+            "Sorted by impact-to-effort ratio (highest value fixes first). "
+            "S = hours, M = days, L = sprint.",
+        )
+        pdf.ln(3)
+
+        SEV_TONE = {4: BAD, 3: BAD, 2: WARN, 1: GOOD}
+        SEV_LABEL = {4: "CRITICAL", 3: "HIGH", 2: "MEDIUM", 1: "LOW"}
+
+        for i, f in enumerate(findings, 1):
+            # Check remaining space — force page break if < 50mm left
+            if pdf.get_y() > 240:
+                pdf.add_page()
+
+            sev   = int(f.get("severity", 2))
+            eff   = f.get("effort", "M")
+            imp   = int(f.get("impact", 3))
+            title = f.get("title", "")
+            detail   = f.get("detail", "")
+            fix      = f.get("fix", "")
+            evidence = f.get("evidence", "")
+            ref_url  = f.get("ref_url", "")
+
+            tone = SEV_TONE.get(sev, WARN)
+
+            # Finding header bar
+            pdf.set_fill_color(*LIGHT)
+            pdf.set_draw_color(*BORDER)
+            pdf.set_line_width(0.2)
+            y0 = pdf.get_y()
+
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_text_color(*BLACK)
+            pdf.cell(0, 6, _s(f"{i}. {title}"), ln=1)
+
+            # Metadata badges row
+            pdf.set_font("Helvetica", "B", 7)
+            pdf.set_text_color(*tone)
+            pdf.cell(22, 4, SEV_LABEL.get(sev, ""), ln=0)
+            pdf.set_text_color(*GREY)
+            pdf.cell(35, 4, f"Effort: {EFFORT_LABEL.get(eff, eff)}", ln=0)
+            pdf.cell(0, 4, f"Impact: {imp} / 5", ln=1)
+            pdf.ln(1)
+
+            # Detail
+            if detail:
+                pdf.set_font("Helvetica", "", 8)
+                pdf.set_text_color(*BLACK)
+                pdf.multi_cell(0, 4, _s(detail))
+                pdf.ln(1)
+
+            # Recommendation
+            if fix:
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_text_color(*GREY)
+                pdf.cell(0, 4, "Recommendation:", ln=1)
+                pdf.set_font("Helvetica", "", 8)
+                pdf.set_text_color(*BLACK)
+                pdf.multi_cell(0, 4, _s(fix))
+                pdf.ln(1)
+
+            # Evidence
+            if evidence:
+                pdf.set_font("Helvetica", "I", 7)
+                pdf.set_text_color(*GREY)
+                pdf.multi_cell(0, 4, _s(f"Evidence: {evidence}"))
+                pdf.ln(1)
+
+            # Reference
+            if ref_url:
+                pdf.set_font("Helvetica", "U", 7)
+                pdf.set_text_color(*GREY)
+                pdf.cell(0, 4, _s(ref_url), ln=1)
+
+            # Thin divider between findings
+            pdf.ln(2)
+            pdf._rule()
+
+    buf = io.BytesIO()
+    pdf.output(buf)
+    return buf.getvalue()

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, stagger } from "animejs";
 import type { AuditReport, Finding } from "../lib/types";
+import { API_BASE } from "../lib/api";
 
 function severityLabel(s: number): string {
   if (s >= 4) return "critical";
@@ -187,7 +188,7 @@ function FindingCard({ finding, index }: { finding: Finding; index: number }) {
 
 function VisibilityBlock({ visibility }: { visibility: AuditReport["visibility"] }) {
   const models = [
-    { key: "gpt" as const, label: "GPT" },
+    { key: "gpt" as const, label: "GPT-4o" },
     { key: "claude" as const, label: "Claude" },
     { key: "perplexity" as const, label: "Perplexity" },
     { key: "gemini" as const, label: "Gemini" },
@@ -205,14 +206,26 @@ function VisibilityBlock({ visibility }: { visibility: AuditReport["visibility"]
     });
   }, []);
 
+  const multipliers = models.map((m) => {
+    const b = visibility.before[m.key];
+    const a = visibility.after[m.key];
+    return b > 0 ? a / b : a > 0 ? Infinity : 1;
+  });
+  const avgMultiplier =
+    multipliers.filter(isFinite).reduce((s, x) => s + x, 0) /
+    (multipliers.filter(isFinite).length || 1);
+
   return (
     <div className="visibility-block" ref={ref}>
-      <h3 className="section-title">Visibility Estimate</h3>
-      <p className="section-sub">Estimated likelihood each AI model finds & cites this page</p>
+      <h3 className="section-title">Visibility Analysis</h3>
+      <p className="section-sub">
+        Estimated likelihood each AI model finds and cites this page — before and after top fixes
+      </p>
       <div className="vis-grid">
-        {models.map((m) => {
+        {models.map((m, i) => {
           const before = visibility.before[m.key] * 100;
           const after = visibility.after[m.key] * 100;
+          const mult = multipliers[i];
           return (
             <div className="vis-col" key={m.key}>
               <span className="vis-model">{m.label}</span>
@@ -238,9 +251,16 @@ function VisibilityBlock({ visibility }: { visibility: AuditReport["visibility"]
                   <span className="vis-pct">{Math.round(after)}%</span>
                 </div>
               </div>
+              <span className="vis-mult">
+                {isFinite(mult) ? `${mult.toFixed(1)}x` : `+${Math.round(after)}pp`} improvement
+              </span>
             </div>
           );
         })}
+      </div>
+      <div className="vis-avg">
+        Average improvement across all AI platforms:&nbsp;
+        <strong>{avgMultiplier.toFixed(1)}x</strong>
       </div>
     </div>
   );
@@ -284,7 +304,7 @@ function CoverageCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-export default function ReportDashboard({ report }: { report: AuditReport }) {
+export default function ReportDashboard({ report, auditId }: { report: AuditReport; auditId?: string }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [showAllFindings, setShowAllFindings] = useState(false);
 
@@ -319,13 +339,20 @@ export default function ReportDashboard({ report }: { report: AuditReport }) {
       md += `\n---\n\n`;
     }
     if (report.visibility) {
-      md += `## Visibility Impact\n\n`;
-      md += `| Platform | Before | After |\n|----------|-------:|------:|\n`;
+      md += `## Visibility Analysis\n\n`;
+      md += `| Platform | Before | After | Improvement |\n|----------|-------:|------:|------------:|\n`;
       for (const [platform, before] of Object.entries(report.visibility.before)) {
         const after = report.visibility.after[platform as keyof typeof report.visibility.after];
-        md += `| ${platform.charAt(0).toUpperCase() + platform.slice(1)} | ${(before * 100).toFixed(0)}% | ${(after * 100).toFixed(0)}% |\n`;
+        const mult = before > 0 ? after / before : 0;
+        const label = platform === "gpt" ? "GPT-4o" : platform.charAt(0).toUpperCase() + platform.slice(1);
+        md += `| ${label} | ${(before * 100).toFixed(0)}% | ${(after * 100).toFixed(0)}% | ${mult > 0 ? mult.toFixed(1) + "x" : "—"} |\n`;
       }
-      md += `\n---\n\n`;
+      const vals = Object.entries(report.visibility.before).map(([p, b]) => {
+        const a = report.visibility.after[p as keyof typeof report.visibility.after];
+        return b > 0 ? a / b : 0;
+      }).filter((x) => x > 0);
+      const avg = vals.reduce((s, x) => s + x, 0) / (vals.length || 1);
+      md += `\n> Average improvement: **${avg.toFixed(1)}x** across all AI platforms\n\n---\n\n`;
     }
     if (report.findings?.length) {
       md += `## Findings (${report.findings.length})\n\n`;
@@ -338,6 +365,8 @@ export default function ReportDashboard({ report }: { report: AuditReport }) {
         if (f.detail) md += `${f.detail}\n\n`;
         if (f.fix) md += `**Recommendation:** ${f.fix}\n\n`;
         if (f.evidence) md += `*Evidence: ${f.evidence}*\n\n`;
+        if (f.ref_url) md += `*Reference: ${f.ref_url}*\n\n`;
+        md += `---\n\n`;
       }
     }
     md += `---\n*Generated by Findable — AI Readiness Audit*`;
@@ -351,56 +380,62 @@ export default function ReportDashboard({ report }: { report: AuditReport }) {
   }
 
   function handleDownloadPdf() {
-    const win = window.open("", "_blank");
-    if (!win) return;
-    const vis = report.visibility;
-    const rows = vis
-      ? Object.entries(vis.before).map(([k, v]) => {
-          const after = vis.after[k as keyof typeof vis.after];
-          return `<tr><td>${k.charAt(0).toUpperCase() + k.slice(1)}</td><td>${(v * 100).toFixed(0)}%</td><td>${(after * 100).toFixed(0)}%</td></tr>`;
-        }).join("")
-      : "";
-    const findingsHtml = report.findings?.length
-      ? `<h2>Findings (${report.findings.length})</h2>${report.findings.map(f => {
-          const sevLabel = f.severity >= 4 ? "Critical" : f.severity >= 3 ? "High" : f.severity >= 2 ? "Medium" : "Low";
-          return `<div class="finding"><h3>${f.title}</h3><p class="meta">${sevLabel} · ${f.effort === "S" ? "Quick fix" : f.effort === "M" ? "Moderate" : "Large"} · Impact ${f.impact}/5</p>${f.detail ? `<p>${f.detail}</p>` : ""}${f.fix ? `<p><strong>Recommendation:</strong> ${f.fix}</p>` : ""}</div>`;
-        }).join("")}`
-      : "";
-    const agentRows = report.scores
-      ? Object.entries(report.scores).map(([id, s]) => `<tr><td>${AGENT_INFO[id]?.name || id}</td><td>${s}/100</td></tr>`).join("")
-      : "";
-    win.document.write(`<!DOCTYPE html>
+    if (auditId) {
+      // Backend-generated PDF — proper layout, all findings, verbose
+      const a = document.createElement("a");
+      a.href = `${API_BASE}/api/audit/${auditId}/pdf`;
+      a.download = `findable-${hostname(report.url)}.pdf`;
+      a.click();
+    } else {
+      // Fallback: browser print (no auditId available — e.g., pre-SSE fallback report)
+      const win = window.open("", "_blank");
+      if (!win) return;
+      const vis = report.visibility;
+      const visRows = vis
+        ? Object.entries(vis.before).map(([k, v]) => {
+            const a = vis.after[k as keyof typeof vis.after];
+            const mult = v > 0 ? (a / v).toFixed(1) + "x" : "—";
+            const label = k === "gpt" ? "GPT-4o" : k.charAt(0).toUpperCase() + k.slice(1);
+            return `<tr><td>${label}</td><td>${(v * 100).toFixed(0)}%</td><td>${(a * 100).toFixed(0)}%</td><td>${mult}</td></tr>`;
+          }).join("")
+        : "";
+      const findingsHtml = report.findings?.length
+        ? `<h2>Findings (${report.findings.length})</h2>${report.findings.map((f) => {
+            const sevLabel = f.severity >= 4 ? "Critical" : f.severity >= 3 ? "High" : f.severity >= 2 ? "Medium" : "Low";
+            return `<div class="finding"><h3>${f.title}</h3><p class="meta">${sevLabel} &middot; ${f.effort === "S" ? "Quick fix" : f.effort === "M" ? "Moderate" : "Large"} &middot; Impact ${f.impact}/5</p>${f.detail ? `<p>${f.detail}</p>` : ""}${f.fix ? `<p><strong>Recommendation:</strong> ${f.fix}</p>` : ""}${f.evidence ? `<p><em>Evidence:</em> ${f.evidence}</p>` : ""}${f.ref_url ? `<p><a href="${f.ref_url}">${f.ref_url}</a></p>` : ""}</div>`;
+          }).join("")}`
+        : "";
+      const agentRows = report.scores
+        ? Object.entries(report.scores).map(([id, s]) => `<tr><td>${AGENT_INFO[id]?.name || id}</td><td>${s}/100</td></tr>`).join("")
+        : "";
+      win.document.write(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Findable Report — ${hostname(report.url)}</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; line-height: 1.6; }
-  h1 { font-size: 24px; border-bottom: 2px solid #d4af37; padding-bottom: 8px; }
-  h2 { font-size: 18px; margin-top: 28px; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }
-  th { background: #f5f5f5; }
-  .finding { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
-  .finding h3 { margin: 0 0 4px; font-size: 15px; }
-  .meta { font-size: 12px; color: #666; margin: 0 0 8px; }
-  .score { font-size: 48px; font-weight: 700; color: #d4af37; margin: 12px 0; }
-  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-  .critical { background: #fde8e8; color: #c44a4a; }
-  .high { background: #fff3e0; color: #d4a030; }
-  .medium { background: #fff8e1; color: #b8860b; }
-  .low { background: #e8f5e9; color: #2e7d32; }
-  .footer { margin-top: 40px; font-size: 12px; color: #999; border-top: 1px solid #ddd; padding-top: 12px; }
-  @media print { body { margin: 0; padding: 20px; } }
+  body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.6}
+  h1{font-size:22px;border-bottom:2px solid #d4af37;padding-bottom:8px;margin-bottom:4px}
+  h2{font-size:16px;margin-top:28px;margin-bottom:8px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+  th,td{padding:7px 10px;text-align:left;border-bottom:1px solid #ddd}
+  th{background:#f7f7f7;font-weight:600}
+  .finding{border:1px solid #e0e0e0;border-radius:6px;padding:12px 14px;margin:10px 0}
+  .finding h3{margin:0 0 3px;font-size:14px}
+  .meta{font-size:11px;color:#666;margin:0 0 8px}
+  .score{font-size:52px;font-weight:700;color:#d4af37;margin:10px 0 4px}
+  .footer{margin-top:36px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px}
+  @media print{body{margin:0;padding:18px}}
 </style></head><body>
-<h1>AI Readiness Audit Report</h1>
-<p><strong>Target:</strong> ${report.url}<br><strong>Date:</strong> ${report.generated_at ? new Date(report.generated_at).toLocaleString() : "—"}</p>
-<div class="score">${report.ai_readiness_score ?? "—"}<span style="font-size:20px;color:#666;font-weight:400;">/100</span></div>
-${report.summary ? `<h2>Executive Summary</h2><p>${report.summary}</p>` : ""}
+<h1>Findable — AI Readiness Audit Report</h1>
+<p style="font-size:13px;color:#555"><strong>Target:</strong> ${report.url}<br><strong>Date:</strong> ${report.generated_at ? new Date(report.generated_at).toLocaleString() : "—"}</p>
+<div class="score">${report.ai_readiness_score ?? "—"}<span style="font-size:18px;color:#888;font-weight:400"> / 100</span></div>
+${report.summary ? `<h2>Executive Summary</h2><p style="font-size:13px">${report.summary}</p>` : ""}
 ${agentRows ? `<h2>Category Scores</h2><table><tr><th>Category</th><th>Score</th></tr>${agentRows}</table>` : ""}
-${rows ? `<h2>Visibility Impact</h2><table><tr><th>Platform</th><th>Before</th><th>After</th></tr>${rows}</table>` : ""}
+${visRows ? `<h2>Visibility Analysis</h2><table><tr><th>Platform</th><th>Before</th><th>After</th><th>Improvement</th></tr>${visRows}</table>` : ""}
 ${findingsHtml}
-<div class="footer">Generated by Findable — AI Readiness Audit</div>
+<div class="footer">Generated by Findable &mdash; AI Readiness Audit</div>
 <script>window.print();window.close();</script>
 </body></html>`);
-    win.document.close();
+      win.document.close();
+    }
   }
 
   const allFindings: Finding[] = report.findings ?? [];
@@ -467,7 +502,6 @@ ${findingsHtml}
                 key={as.id}
                 label={as.name}
                 score={as.score}
-                color={as.color}
                 delay={i * 80}
               />
             ))}
@@ -523,7 +557,7 @@ ${findingsHtml}
                 | { nodes: Array<{ id: string; label: string; type: string }>; edges: Array<{ source: string; target: string; relation: string }> }
                 | undefined;
               return (
-                <div key={ai} className="agent-result-card" style={{ borderColor: info.color }}>
+                <div key={ai} className="agent-result-card" style={{ borderColor: ar.score >= 80 ? "var(--good)" : ar.score >= 50 ? "var(--warn)" : "var(--bad)" }}>
                   <div className="ar-head">
                     <span className="ar-name">{info.name}</span>
                     <span className="ar-score">{ar.score}/100</span>

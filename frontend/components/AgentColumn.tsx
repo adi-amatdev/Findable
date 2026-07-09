@@ -63,7 +63,6 @@ export default function AgentColumn({
   const colRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const fillRef = useRef<HTMLDivElement>(null);
-  const scoreRef = useRef<HTMLSpanElement>(null);
   const phaseRef = useRef<HTMLSpanElement>(null);
 
   const progress = PHASE_PROGRESS[lastPhase || state.phase] ?? 0;
@@ -77,22 +76,6 @@ export default function AgentColumn({
       });
     }
   }, [progress]);
-
-  useEffect(() => {
-    if (state.phase === "done" && state.score !== undefined && scoreRef.current) {
-      const obj = { value: 0 };
-      animate(obj, {
-        value: [0, state.score],
-        duration: 800,
-        ease: "outCubic",
-        onUpdate: () => {
-          if (scoreRef.current) {
-            scoreRef.current.textContent = String(Math.round(obj.value));
-          }
-        },
-      });
-    }
-  }, [state.phase, state.score]);
 
   useEffect(() => {
     if (state.phase === "streaming" && lastPhase && phaseRef.current) {
@@ -143,9 +126,6 @@ export default function AgentColumn({
         <span className="agent-phase-label" ref={phaseRef} key={lastPhase || state.phase}>
           {label}
         </span>
-        {state.phase === "done" && state.score !== undefined && (
-          <span className="agent-score" ref={scoreRef}>0</span>
-        )}
       </div>
     </div>
   );
