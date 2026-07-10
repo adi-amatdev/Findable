@@ -28,8 +28,8 @@ At FastAPI startup, `probe_backends()` makes a health-check request to each conf
 | `VLLM_HEAVY_MODEL_NAME` | `--served-model-name` on heavy server | `heavy` |
 | `VLLM_LIGHT_MODEL_NAME` | `--served-model-name` on light server | `light` |
 | `FIREWORKS_KEY` | Fireworks API key | _(empty — tier skipped)_ |
-| `FIREWORKS_HEAVY_MODEL` | Fireworks model for heavy roles | `accounts/fireworks/models/gemma-4-26b-a4b-it` |
-| `FIREWORKS_LIGHT_MODEL` | Fireworks model for light roles | `accounts/fireworks/models/gemma-4-e4b` |
+| `FIREWORKS_HEAVY_MODEL` | Fireworks serverless model for heavy roles | `accounts/fireworks/models/gpt-oss-120b` |
+| `FIREWORKS_LIGHT_MODEL` | Fireworks serverless model for light roles | `accounts/fireworks/models/gpt-oss-20b` |
 | `OLLAMA_URL` | Local Ollama | `http://localhost:11434` |
 | `LOCAL_LIGHT_MODEL` | Ollama model for light roles | `gemma4:e2b` |
 | `LOCAL_HEAVY_MODEL` | Ollama model for heavy roles | `gemma4:e2b` |
@@ -52,12 +52,12 @@ At FastAPI startup, `probe_backends()` makes a health-check request to each conf
 - **Light** (`VLLM_LIGHT_URL`): `google/gemma-2-2b-it`, served as `light`
 - **Heavy** (`VLLM_URL`): `google/gemma-2-9b-it`, served as `heavy`
 
-## Fireworks fallback models
+## Fireworks serverless fallback models
 
-- **Heavy roles** (`crawlability_judgment`, `content_signal`, `report_writer`): `accounts/fireworks/models/gemma-4-26b-a4b-it`
-- **Light roles** (`structured_data`, `entity_topic`, reserved orchestrator roles): `accounts/fireworks/models/gemma-4-e4b`
+- **Heavy roles** (`crawlability_judgment`, `content_signal`, `report_writer`): `accounts/fireworks/models/gpt-oss-120b`
+- **Light roles** (`structured_data`, `entity_topic`, reserved orchestrator roles): `accounts/fireworks/models/gpt-oss-20b`
 
-These IDs match the official Fireworks model paths for Gemma 4 26B A4B IT and Gemma 4 E4B.
+Fireworks' Gemma-family model pages checked for this project mark serverless as "Not supported", so the no-deployment fallback defaults use serverless GPT OSS models. If on-demand deployments are later approved, the Gemma paths remain available as optional overrides: `accounts/fireworks/models/gemma-4-26b-a4b-it` and `accounts/fireworks/models/gemma-4-e4b`.
 
 ## Failover behaviour
 

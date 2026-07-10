@@ -35,6 +35,58 @@ def _merge_system_message(messages: list[dict[str, Any]]) -> list[dict[str, Any]
     return [{"role": "user", "content": system_content}, *rest]
 
 
+def _is_fireworks_base(base_url: str) -> bool:
+    return "api.fireworks.ai" in base_url.lower()
+
+
+def _is_ollama_base(base_url: str) -> bool:
+    lowered = base_url.lower()
+    return "11434" in lowered or "ollama" in lowered
+
+
+def _json_schema_response_format(schema: dict[str, Any]) -> dict[str, Any]:
+    """Translate vLLM guided_json schema to OpenAI/Fireworks json_schema format."""
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "findable_agent_result",
+            "schema": schema,
+        },
+    }
+
+
+def _build_payload(
+    *,
+    base_url: str,
+    messages: list[dict[str, Any]],
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    response_format: Optional[dict[str, Any]] = None,
+    tools: Optional[list[dict[str, Any]]] = None,
+    tool_choice: Optional[str | dict] = None,
+    guided_json: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if response_format:
+        payload["response_format"] = response_format
+    if tools:
+        payload["tools"] = tools
+    if tool_choice is not None:
+        payload["tool_choice"] = tool_choice
+    if guided_json:
+        if _is_fireworks_base(base_url):
+            payload["response_format"] = _json_schema_response_format(guided_json)
+        elif not _is_ollama_base(base_url):
+            payload["guided_json"] = json.dumps(guided_json)
+    return payload
+
+
 class AsyncLLMClient:
     """Thin async wrapper around any OpenAI-compatible /v1/chat/completions endpoint."""
 
@@ -59,20 +111,17 @@ class AsyncLLMClient:
         guided_json: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         messages = _merge_system_message(messages)
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        if response_format:
-            payload["response_format"] = response_format
-        if tools:
-            payload["tools"] = tools
-        if tool_choice is not None:
-            payload["tool_choice"] = tool_choice
-        if guided_json:
-            payload["guided_json"] = json.dumps(guided_json)
+        payload = _build_payload(
+            base_url=self._base_url,
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format=response_format,
+            tools=tools,
+            tool_choice=tool_choice,
+            guided_json=guided_json,
+        )
 
         t0 = time.monotonic()
         async with httpx.AsyncClient(timeout=self._timeout) as client:

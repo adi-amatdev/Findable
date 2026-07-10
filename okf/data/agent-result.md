@@ -22,7 +22,7 @@ interface AgentResult {
   artifacts: Record<string, unknown>;          // agent-specific; entity agent returns { "knowledge_graph": {...} }
   traffic_signal: TrafficSignal | null;       // domain rank, cloudflare visits estimate
   crawl_reports: CrawlReport[];               // crawlability agent only
-  model_used: string;                         // e.g. "accounts/fireworks/models/gemma-4-26b-a4b-it"
+  model_used: string;                         // e.g. "accounts/fireworks/models/gpt-oss-120b"
   latency_ms: number;                         // inference latency in ms
   tokens: number;                             // total tokens consumed (prompt + completion)
   prompt_tokens: number;                      // input/prompt tokens for the final judgment call

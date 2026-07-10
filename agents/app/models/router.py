@@ -3,7 +3,7 @@ Model Router — dual-endpoint vLLM + Fireworks + Ollama with startup discovery.
 
 Priority (highest → lowest):
   1. vLLM (remote GPU, two separate cloudflared tunnels — heavy and light)
-  2. Fireworks API  (cloud fallback, key required)
+  2. Fireworks API  (serverless cloud fallback, key required)
   3. Ollama         (local last resort)
 
 Role → tier mapping:
@@ -52,10 +52,10 @@ OLLAMA_HEAVY_MODEL = os.getenv("LOCAL_HEAVY_MODEL", "gemma4:e2b")
 FIREWORKS_BASE        = "https://api.fireworks.ai/inference"
 FIREWORKS_KEY         = os.getenv("FIREWORKS_KEY", "")
 FIREWORKS_HEAVY_MODEL = os.getenv(
-    "FIREWORKS_HEAVY_MODEL", "accounts/fireworks/models/gemma-4-26b-a4b-it"
+    "FIREWORKS_HEAVY_MODEL", "accounts/fireworks/models/gpt-oss-120b"
 )
 FIREWORKS_LIGHT_MODEL = os.getenv(
-    "FIREWORKS_LIGHT_MODEL", "accounts/fireworks/models/gemma-4-e4b"
+    "FIREWORKS_LIGHT_MODEL", "accounts/fireworks/models/gpt-oss-20b"
 )
 
 _local_only = os.getenv("LOCAL_ONLY", "0") == "1"

@@ -59,7 +59,7 @@ flowchart TB
     aggregator[Aggregator<br/>score, visibility, summary] --> router
 
     router -->|primary| vllm[vLLM on AMD ROCm<br/>Gemma 2 light/heavy]
-    router -->|fallback| fireworks[Fireworks AI<br/>Gemma 4 26B A4B IT + Gemma 4 E4B]
+    router -->|fallback| fireworks[Fireworks AI serverless<br/>GPT OSS 120B + 20B]
     router -->|last resort| ollama[Ollama local Gemma]
     router --> tokenlog[(Token usage JSONL)]
 
@@ -137,8 +137,8 @@ Findable uses a routed inference stack:
 |---|---|---|
 | Primary light | `google/gemma-2-2b-it` via vLLM on AMD ROCm | Fast light roles: structured data, entity/topic, reserved orchestrator roles |
 | Primary heavy | `google/gemma-2-9b-it` via vLLM on AMD ROCm | Heavier judgment roles: crawlability judgment, content signal, report writer |
-| Cloud fallback heavy | `accounts/fireworks/models/gemma-4-26b-a4b-it` | Fireworks replacement for the heavy vLLM tier |
-| Cloud fallback light | `accounts/fireworks/models/gemma-4-e4b` | Fireworks replacement for the light vLLM tier |
+| Serverless cloud fallback heavy | `accounts/fireworks/models/gpt-oss-120b` | No-deployment Fireworks fallback for the heavy vLLM tier |
+| Serverless cloud fallback light | `accounts/fireworks/models/gpt-oss-20b` | No-deployment Fireworks fallback for the light vLLM tier |
 | Local fallback | `gemma4:e2b` via Ollama | Last-resort local development fallback |
 
 The router probes every configured backend on startup and uses this priority order:
@@ -153,11 +153,22 @@ Every successful LLM call is logged to `agents/logs/token_usage.jsonl` with role
 
 Gemma chat templates reject `system` role messages on the vLLM path. Findable handles this centrally in `agents/app/models/client.py` by folding a leading system message into the first user message before sending the request. This keeps agent prompts unchanged while preventing vLLM calls from failing and falling through unnecessarily.
 
+### Fireworks serverless note
+
+Fireworks' Gemma-family model pages checked for this project currently mark serverless as **not supported**. The README therefore uses no-deployment serverless Fireworks defaults (`gpt-oss-120b` and `gpt-oss-20b`) for cloud fallback. If you later create Fireworks on-demand deployments, you can switch the env vars to:
+
+```env
+FIREWORKS_HEAVY_MODEL=accounts/fireworks/models/gemma-4-26b-a4b-it
+FIREWORKS_LIGHT_MODEL=accounts/fireworks/models/gemma-4-e4b
+```
+
+See [docs/fireworks_serverless_pricing.md](docs/fireworks_serverless_pricing.md) for model availability, pricing, and rough per-audit cost.
+
 ### Gemma licensing
 
 Findable uses Gemma models in two places:
 
-- **Gemma 4 on Fireworks**: Google publishes a Gemma 4 Apache 2.0 license page. Fireworks lists `Gemma 4 26B A4B IT` and `Gemma 4 E4B` as Google models with the model paths used above.
+- **Gemma 4 on Fireworks on-demand**: Google publishes a Gemma 4 Apache 2.0 license page. Fireworks lists `Gemma 4 26B A4B IT` and `Gemma 4 E4B`, but the checked pages mark serverless as not supported.
 - **Gemma 2 on local vLLM**: the local AMD path downloads `google/gemma-2-2b-it` and `google/gemma-2-9b-it`. Those earlier Gemma generations are governed by Google's Gemma Terms of Use, so operators should accept the Hugging Face / Google model terms and comply with the prohibited-use policy before hosting them.
 
 No extra Findable-specific license key is required for the model code, but production operators must comply with the applicable Google/Firebase/Hugging Face/Fireworks terms for the model and hosting path they choose.
@@ -166,8 +177,9 @@ Useful references:
 
 - [Gemma Terms of Use](https://ai.google.dev/gemma/terms)
 - [Gemma 4 Apache 2.0 license](https://ai.google.dev/gemma/apache_2)
-- [Fireworks Gemma 4 26B A4B IT](https://fireworks.ai/models/fireworks/gemma-4-26b-a4b-it)
-- [Fireworks Gemma 4 E4B](https://fireworks.ai/models/fireworks/gemma-4-e4b)
+- [Fireworks serverless pricing](https://docs.fireworks.ai/serverless/pricing)
+- [Fireworks GPT OSS 120B](https://fireworks.ai/models/fireworks/gpt-oss-120b)
+- [Fireworks GPT OSS 20B](https://fireworks.ai/models/fireworks/gpt-oss-20b)
 
 ---
 
@@ -189,7 +201,7 @@ The full-load snapshot shows GPU utilization reaching 100% with roughly 43.7 GB 
 
 - Docker + Docker Compose
 - Firecrawl API key for real crawling
-- Optional Fireworks API key for Gemma cloud fallback
+- Optional Fireworks API key for serverless cloud fallback
 - Optional AMD ROCm GPU host for local vLLM inference
 - Optional Ollama for last-resort local fallback
 
@@ -209,8 +221,8 @@ Important environment variables:
 | `VLLM_URL` | Heavy vLLM endpoint printed by `vllm_hosting/start_service.sh` |
 | `VLLM_LIGHT_URL` | Light vLLM endpoint printed by `vllm_hosting/start_service.sh` |
 | `FIREWORKS_KEY` | Enables Gemma 4 cloud fallback |
-| `FIREWORKS_HEAVY_MODEL` | Defaults to `accounts/fireworks/models/gemma-4-26b-a4b-it` |
-| `FIREWORKS_LIGHT_MODEL` | Defaults to `accounts/fireworks/models/gemma-4-e4b` |
+| `FIREWORKS_HEAVY_MODEL` | Defaults to serverless `accounts/fireworks/models/gpt-oss-120b` |
+| `FIREWORKS_LIGHT_MODEL` | Defaults to serverless `accounts/fireworks/models/gpt-oss-20b` |
 | `MOCK_STREAM` | Set `true` for a zero-cost frontend demo |
 | `TOKEN_LOG_PATH` | JSONL path for token usage records |
 
@@ -317,7 +329,7 @@ The current hosted demo is:
 | Crawling | Firecrawl rendered crawl + direct `httpx` fetch |
 | Agents | Four async specialist agents, SSE phase emission, deterministic crawlability sub-agent |
 | Inference | vLLM on AMD ROCm, Fireworks AI, Ollama |
-| Models | Gemma 2 2B/9B locally; Gemma 4 26B A4B IT and Gemma 4 E4B on Fireworks |
+| Models | Gemma 2 2B/9B locally; Fireworks serverless GPT OSS fallbacks; optional Gemma 4 Fireworks on-demand |
 | Scoring | Deterministic weighted rubric, hard gates, derived visibility estimate |
 | Frontend | Next.js, React, anime.js, EventSource SSE |
 | State | Redis cache, in-process SSE queues, JSONL token logs |
@@ -358,3 +370,4 @@ Useful API routes:
 - [VALIDATION.md](VALIDATION.md) - current architecture conformance map
 - [okf/](okf/index.md) - OKF system knowledge base
 - [vllm_hosting/](vllm_hosting/) - AMD/vLLM hosting and load-test scripts
+- [docs/fireworks_serverless_pricing.md](docs/fireworks_serverless_pricing.md) - Fireworks serverless model/pricing notes
