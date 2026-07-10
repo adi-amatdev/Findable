@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { animate, stagger, svg } from "animejs";
+import { motion, AnimatePresence } from "motion/react";
 import AgentColumn, { AgentState } from "../components/AgentColumn";
 import FactsStrip from "../components/FactsStrip";
 import ReportDashboard from "../components/ReportDashboard";
@@ -117,6 +118,24 @@ const STORY: Array<[string, string]> = [
   ["Facts", "Deterministic extraction distils raw signals into structured SiteFacts."],
   ["Judge", "Four concurrent agents each argue one dimension of AI-readiness."],
   ["Report", "Weighted aggregation into a scored, readable audit report."],
+];
+
+const DYK_CARDS: Array<{ stat: string; label: string; body: string }> = [
+  {
+    stat: "25%",
+    label: "search volume drop by 2026",
+    body: "Gartner predicts traditional search volume will drop 25% by 2026 as AI answer engines like ChatGPT, Perplexity, and Google AI Overviews grow in adoption, meaning fewer users clicking blue links and more getting synthesized answers directly.",
+  },
+  {
+    stat: "$4.1B",
+    label: "AEO market by 2035",
+    body: "Answer Engine Optimization is projected to grow from $160.9M in 2026 to $4.1B by 2035 at a 43.4% CAGR. Over $200M in venture funding has already flowed into AEO tooling as the discipline matures from niche practice into a standard marketing line item.",
+  },
+  {
+    stat: "2–4x",
+    label: "higher conversion from AI traffic",
+    body: "AI-sourced leads convert 2-4x better than conventional search traffic, and generative AI referral visits to SMB sites grew 123% in the first half of 2025 even as classic search clicks declined. Structuring content for extractability is the new differentiator.",
+  },
 ];
 
 function initialAgents(): Record<string, AgentState> {
@@ -407,8 +426,24 @@ export default function Home() {
                 <span className="story-n">{i + 1}</span>
                 <span className="story-t">{t}</span>
                 <span className="story-d">{d}</span>
+                <span className="story-hint">click to learn</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {stage === "idle" && (
+          <div className="dyk-section">
+            <p className="dyk-heading">Did you know?</p>
+            <div className="dyk-grid">
+              {DYK_CARDS.map((c) => (
+                <div className="dyk-card" key={c.stat}>
+                  <div className="dyk-stat">{c.stat}</div>
+                  <div className="dyk-label">{c.label}</div>
+                  <p className="dyk-body">{c.body}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>
@@ -453,29 +488,50 @@ export default function Home() {
 
       {stage === "generating" && (
         <div className="generating-card">
-          {processingStep >= PROCESS_STEPS.length && (
-            <div className="generating-top">
-              <AnimatedCheckmark />
-              <p className="generating-text">Report ready</p>
-            </div>
-          )}
-          <div className={`processing-steps ${processingStep >= PROCESS_STEPS.length ? "fade-in" : ""}`}>
-            {PROCESS_STEPS.map((s, i) => (
-              <div key={s} className={`proc-step ${i < processingStep ? "done" : i === processingStep ? "active" : ""}`}>
-                {i < processingStep ? (
-                  <svg className="proc-check" viewBox="0 0 16 16" width="16" height="16">
-                    <circle cx="8" cy="8" r="7" fill="var(--good)" />
-                    <path d="M5 8.5 L7 10.5 L11 6" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ) : i === processingStep ? (
-                  <span className="proc-spinner" />
-                ) : (
-                  <span className="proc-dot" />
-                )}
-                <span className="proc-label">{s}</span>
-              </div>
-            ))}
-          </div>
+          <AnimatePresence mode="wait">
+            {processingStep < PROCESS_STEPS.length ? (
+              <motion.div
+                key="steps"
+                className="processing-steps"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.3 } }}
+              >
+                {PROCESS_STEPS.map((s, i) => (
+                  <motion.div
+                    key={s}
+                    className={`proc-step ${i < processingStep ? "done" : i === processingStep ? "active" : ""}`}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.08, duration: 0.3 }}
+                  >
+                    {i < processingStep ? (
+                      <svg className="proc-check" viewBox="0 0 16 16" width="16" height="16">
+                        <circle cx="8" cy="8" r="7" fill="var(--good)" />
+                        <path d="M5 8.5 L7 10.5 L11 6" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : i === processingStep ? (
+                      <span className="proc-spinner" />
+                    ) : (
+                      <span className="proc-dot" />
+                    )}
+                    <span className="proc-label">{s}</span>
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="done"
+                className="generating-top"
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 260, damping: 18 }}
+              >
+                <AnimatedCheckmark />
+                <p className="generating-text">Report ready</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
@@ -490,7 +546,7 @@ export default function Home() {
         <span className="footer-sep">·</span>
         <span className="footer-author">Aaditya Acharya</span>
         <span className="footer-sep">·</span>
-        <span className="footer-author">Rohit Neeraje</span>
+        <span className="footer-author">Rohith Neeraje</span>
       </footer>
 
       {wiki && <WikiModal entry={WIKI[wiki]} onClose={() => setWiki(null)} />}

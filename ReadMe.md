@@ -2,26 +2,26 @@
 
 > Can AI actually read, trust, and cite your website?
 
-Findable audits a URL the way AI crawlers see it - not classic SEO. It tells you what content is JS-gated, which AI bots are blocked, how strong your schema markup is, and whether your page is citation-worthy for ChatGPT, Claude, Perplexity, and Gemini.
+Findable audits a URL the way AI crawlers see it, not classic SEO. It tells you what content is JS-gated, which AI bots are blocked, how strong your schema markup is, and whether your page is citation-worthy for ChatGPT, Claude, Perplexity, and Gemini.
 
-**Built by Team Dhridhata** - Aaditya Acharya · Rohit Neeraje
+**Built by Team Dhridhata** - Aaditya Acharya, Rohith Neeraje
 
 ---
 
 ## How it works
 
 ```
-URL → Firecrawl (rendered) + httpx (raw) → SiteFacts
-         ↓
+URL -> Firecrawl (rendered) + httpx (raw) -> SiteFacts
+         |
   Four AI agents run in parallel (asyncio.gather)
-  ├── Crawlability     (30%) - robots.txt, JS-gating, latency, sitemaps
-  ├── Content Signal   (35%) - E-E-A-T, commodity check, citation-worthiness
-  ├── Structured Data  (15%) - schema.org, llms.txt, meta extraction
-  └── Entity & Topic   (20%) - knowledge graph, disambiguation, authority
-         ↓
-  Weighted score (0–100) + score caps on critical failures + estimated before/after visibility per AI bot
-         ↓
-  AuditReport → live SSE dashboard → PDF / Markdown export
+  +-- Crawlability     (30%) - robots.txt, JS-gating, latency, sitemaps
+  +-- Content Signal   (35%) - E-E-A-T, commodity check, citation-worthiness
+  +-- Structured Data  (15%) - schema.org, llms.txt, meta extraction
+  +-- Entity & Topic   (20%) - knowledge graph, disambiguation, authority
+         |
+  Weighted score (0-100) + score caps on critical failures
+         |
+  AuditReport -> live SSE dashboard -> PDF / Markdown export
 ```
 
 Results stream live to the frontend via SSE as each agent completes.
@@ -34,13 +34,13 @@ Findable's reasoning engine runs entirely on **AMD ROCm + vLLM + Gemma**:
 
 | Layer | Detail |
 |---|---|
-| Hardware | AMD Radeon PRO W7900 · 48 GB VRAM · ROCm 7.2.1 |
-| Light model | `google/gemma-2-2b-it` - served via vLLM on port 8000 |
-| Heavy model | `google/gemma-2-9b-it` - served via vLLM on port 8001 |
-| Cloud fallback | Fireworks AI - `gemma-4-27b-it` (heavy) · `gemma-4-e4b-it` (light) |
-| Local fallback | Ollama - `gemma4:e2b` |
+| Hardware | AMD Radeon PRO W7900, 48 GB VRAM, ROCm 7.2.1 |
+| Light model | `google/gemma-2-2b-it` via vLLM on port 8000 |
+| Heavy model | `google/gemma-2-9b-it` via vLLM on port 8001 |
+| Cloud fallback | Fireworks AI: `gemma-4-27b-it` (heavy), `gemma-4-e4b-it` (light) |
+| Local fallback | Ollama: `gemma4:e2b` |
 
-All four agents fire **concurrent async requests** that vLLM batches via continuous batching on the AMD GPU - real parallelism, not N model copies. Fireworks (also Gemma) handles the two heaviest roles as a quality fallback. Gemma models serve every LLM role in the system.
+All four agents fire **concurrent async requests** that vLLM batches via continuous batching on the AMD GPU, real parallelism, not N model copies. Fireworks (also Gemma) handles the two heaviest roles as a quality fallback. Gemma models serve every LLM role in the system.
 
 ---
 
@@ -69,7 +69,7 @@ Edit `.env`:
 | `FIREWORKS_KEY` | [fireworks.ai](https://fireworks.ai) | Gemma cloud fallback (optional) |
 | `VLLM_URL` | Publicly accessible URL of your running vLLM heavy instance | AMD GPU heavy model (optional) |
 | `VLLM_LIGHT_URL` | Publicly accessible URL of your running vLLM light instance | AMD GPU light model (optional) |
-| `MOCK_STREAM` | Set `true` | Zero-cost demo - no API keys needed |
+| `MOCK_STREAM` | Set `true` | Zero-cost demo, no API keys needed |
 
 ### 2. Run
 
@@ -77,7 +77,7 @@ Edit `.env`:
 docker compose up --build
 ```
 
-This starts frontend, backend, agents-api, and Redis - everything is included.
+This starts frontend, backend, agents-api, and Redis, everything is included.
 
 | Service | URL |
 |---|---|
@@ -91,7 +91,7 @@ This starts frontend, backend, agents-api, and Redis - everything is included.
 MOCK_STREAM=true docker compose up --build
 ```
 
-Streams a full mock audit with realistic SSE events - no Firecrawl, no LLM calls.
+Streams a full mock audit with realistic SSE events, no Firecrawl, no LLM calls.
 
 ---
 
@@ -113,7 +113,7 @@ Expose both ports publicly (e.g. via cloudflared or ngrok), then set the resulti
 
 ## Live deployment
 
-The full stack (frontend, backend, agents-api, Redis) is hosted on an AWS EC2 `t3.small` instance at **[https://findable.duckdns.org](https://findable.duckdns.org)**. All LLM inference is offloaded to the AMD ROCm GPU server (vLLM) and Fireworks AI — the EC2 instance handles only routing, orchestration, and serving the frontend.
+The full stack (frontend, backend, agents-api, Redis) is hosted on an AWS EC2 `t3.small` instance at **[https://findable.duckdns.org](https://findable.duckdns.org)**. All LLM inference is offloaded to the AMD ROCm GPU server (vLLM) and Fireworks AI. The EC2 instance handles only routing, orchestration, and serving the frontend.
 
 ---
 
@@ -122,19 +122,21 @@ The full stack (frontend, backend, agents-api, Redis) is hosted on an AWS EC2 `t
 | Category | Technologies |
 |---|---|
 | AI models | Gemma 2 2B + 9B (AMD/vLLM), Gemma 4 via Fireworks AI |
-| Inference | vLLM on AMD ROCm 7.2.1 · Fireworks AI (Gemma 4 cloud) · Ollama (local fallback) |
-| Backend | Python · FastAPI · httpx · Firecrawl |
-| Agents | 4 async agents · asyncio fan-out · SSE streaming |
-| Scoring | Weighted rubric · score caps on critical failures · per-bot visibility estimate derived from SiteFacts signals |
-| Frontend | Next.js · React · anime.js · SSE EventSource |
-| Infrastructure | Docker Compose · Redis · cloudflared tunnels |
-| Dev tooling | uv · Ruff |
+| Inference | vLLM on AMD ROCm 7.2.1, Fireworks AI (Gemma 4 cloud), Ollama (local fallback) |
+| Backend | Python, FastAPI, httpx, Firecrawl |
+| Agents | 4 async agents, asyncio fan-out, SSE streaming |
+| Scoring | Weighted rubric, score caps on critical failures, per-bot visibility estimate derived from SiteFacts signals |
+| Frontend | Next.js, React, anime.js, motion, SSE EventSource |
+| Infrastructure | Docker Compose, Redis, cloudflared tunnels |
+| Dev tooling | uv, Ruff |
 
 ---
 
-## Why it matters
+## Conclusion
 
-AI search (ChatGPT, Perplexity, Claude, Gemini) is replacing the blue-link web. Websites that aren't readable by AI crawlers simply won't be cited - no matter how good their classic SEO is. Findable gives any site owner a concrete, actionable score and fix list before they get left out of AI answers.
+AI search (ChatGPT, Perplexity, Claude, Gemini) is replacing the blue-link web. Websites that aren't readable by AI crawlers simply won't be cited, no matter how good their classic SEO is. Findable gives any site owner a concrete, actionable score and fix list before they get left out of AI answers.
+
+The numbers back this up. Gartner projects traditional search volume will drop 25% by 2026 as AI answer engines grow, while 40-60% of US informational searches now trigger Google AI Overviews. ChatGPT alone has over 400 million weekly active users. The AEO software market is estimated at USD 160.9M in 2026, projected to reach USD 4.1B by 2035 at a 43.4% CAGR, with over $200M in disclosed venture funding as of early 2026. Generative AI referral traffic to SMB sites grew 123% in H1 2025, and AI-sourced leads convert 2-4x better than conventional search traffic. Paid AI search is expected to become a $3-5B ad channel by 2027, and roughly 35-45% of Fortune 1000 companies now run dedicated AEO programs. Structuring content for extractability is the new differentiator, and tools that measure and improve it have a large, growing addressable market.
 
 ---
 

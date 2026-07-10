@@ -509,12 +509,6 @@ ${findingsHtml}
         </div>
       )}
 
-      {report.visibility && (
-        <div className="dashboard-section">
-          <VisibilityBlock visibility={report.visibility} />
-        </div>
-      )}
-
       {allFindings.length > 0 && (
         <div className="dashboard-section">
           <h3 className="section-title">
@@ -530,6 +524,12 @@ ${findingsHtml}
               <FindingCard key={f.id} finding={f} index={i} />
             ))}
           </div>
+        </div>
+      )}
+
+      {report.visibility && (
+        <div className="dashboard-section">
+          <VisibilityBlock visibility={report.visibility} />
         </div>
       )}
 

@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { animate } from "animejs";
 import type { AgentMeta } from "../lib/agents";
+
+interface LogEntry {
+  ts: string;
+  text: string;
+  phase: string;
+}
 
 export type AgentPhase = "waiting" | "streaming" | "done" | "offline";
 
@@ -51,6 +57,15 @@ const PHASE_PROGRESS: Record<string, number> = {
   offline: 1,
 };
 
+function timestamp(): string {
+  const d = new Date();
+  return [
+    String(d.getHours()).padStart(2, "0"),
+    String(d.getMinutes()).padStart(2, "0"),
+    String(d.getSeconds()).padStart(2, "0"),
+  ].join(":") + "." + String(d.getMilliseconds()).padStart(3, "0");
+}
+
 export default function AgentColumn({
   meta,
   state,
@@ -64,6 +79,8 @@ export default function AgentColumn({
   const textRef = useRef<HTMLDivElement>(null);
   const fillRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<HTMLSpanElement>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const prevTextRef = useRef("");
 
   const progress = PHASE_PROGRESS[lastPhase || state.phase] ?? 0;
 
@@ -89,9 +106,23 @@ export default function AgentColumn({
   }, [lastPhase, state.phase]);
 
   useEffect(() => {
+    const newText = state.text.slice(prevTextRef.current.length);
+    if (!newText) return;
+    prevTextRef.current = state.text;
+    const lines = newText.split("\n").filter((l) => l.trim());
+    if (!lines.length) return;
+    const entries: LogEntry[] = lines.map((line) => ({
+      ts: timestamp(),
+      text: line.trim(),
+      phase: lastPhase || state.phase,
+    }));
+    setLogs((prev) => [...prev, ...entries]);
+  }, [state.text, lastPhase, state.phase]);
+
+  useEffect(() => {
     const el = textRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [state.text]);
+  }, [logs]);
 
   const label = PHASE_LABEL[lastPhase || state.phase] || state.phase;
 
@@ -100,7 +131,7 @@ export default function AgentColumn({
       <div className="agent-head">
         <span className={`status-dot ${state.phase}`} />
         <span className="agent-name">{meta.name}</span>
-        <span className="agent-weight">{meta.weight}</span>
+        <span className="agent-weight">{meta.weight} of score</span>
       </div>
       <p className="agent-role">{meta.role}</p>
 
@@ -108,7 +139,7 @@ export default function AgentColumn({
         <div className="agent-track-fill" ref={fillRef} style={{ transform: "scaleX(0)", transformOrigin: "left" }} />
       </div>
 
-      <div className="agent-body" ref={textRef}>
+      <div className="agent-body terminal-body" ref={textRef}>
         {state.phase === "waiting" && (
           <div className="skeleton" aria-label="waiting for agent stream">
             <div className="bone w80" />
@@ -119,7 +150,13 @@ export default function AgentColumn({
         {state.phase === "offline" && (
           <p className="agent-note">{state.note}</p>
         )}
-        {state.text && <pre className="agent-text">{state.text}</pre>}
+        {logs.map((entry, i) => (
+          <div className={`log-row log-phase-${entry.phase}`} key={i}>
+            <span className="log-ts">{entry.ts}</span>
+            <span className="log-sep">›</span>
+            <span className="log-text">{entry.text}</span>
+          </div>
+        ))}
       </div>
 
       <div className="agent-foot">

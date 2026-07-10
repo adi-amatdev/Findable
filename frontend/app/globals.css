@@ -285,6 +285,23 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
   z-index: 1;
 }
 
+.story-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--gold-2);
+  opacity: 0;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  position: relative;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+}
+
+.story-step:hover .story-hint {
+  opacity: 0.6;
+}
+
 /* === WIKI MODAL === */
 .wiki-overlay {
   position: fixed;
@@ -477,14 +494,14 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
 .agent-col {
   display: flex;
   flex-direction: column;
-  min-height: 320px;
+  height: 260px;
   opacity: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow);
-  padding: 16px 16px 12px;
+  padding: 12px 12px 10px;
   transition: border-color 0.5s ease;
 }
 
@@ -495,13 +512,30 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
 
 .agent-head { display: flex; align-items: center; gap: 8px; }
 .agent-name { font-weight: 500; font-size: 14px; }
-.agent-weight { margin-left: auto; font-size: 11px; color: var(--muted); letter-spacing: 0.03em; }
-.agent-role { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 6px 0 10px; }
-.agent-body { flex: 1; overflow-y: auto; max-height: 280px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-
-.agent-body::-webkit-scrollbar { width: 4px; }
-.agent-body::-webkit-scrollbar-track { background: transparent; }
-.agent-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.agent-weight {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--gold-2);
+  letter-spacing: 0.03em;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.agent-role {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 6px 0 10px;
+  height: 32px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.agent-body { flex: 1; overflow: hidden; }
+.agent-body::-webkit-scrollbar { display: none; }
 
 .agent-text {
   margin: 0;
@@ -512,6 +546,57 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
   line-height: 1.6;
   color: var(--text);
 }
+
+.terminal-body {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  padding: 6px 4px;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.log-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  border-left: 2px solid transparent;
+}
+
+.log-row:last-child {
+  border-left-color: var(--gold-2);
+  background: rgba(201, 168, 76, 0.05);
+}
+
+.log-ts {
+  color: #4a5568;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  font-size: 11px;
+}
+
+.log-sep {
+  color: #4a5568;
+  flex-shrink: 0;
+}
+
+.log-text {
+  color: #a8b5c8;
+  word-break: break-word;
+}
+
+.log-phase-complete .log-text,
+.log-phase-done .log-text     { color: #68d391; }
+.log-phase-error .log-text    { color: #fc8181; }
+.log-phase-retry .log-text    { color: #f6ad55; }
+.log-phase-llm_call .log-text { color: #76e4f7; }
+.log-phase-judgment_call .log-text { color: #b794f4; }
 
 .agent-note { font-size: 12px; color: var(--muted); font-style: italic; }
 
@@ -761,6 +846,99 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
 
 @media (max-width: 560px) {
   .agent-grid, .story { grid-template-columns: 1fr; }
+}
+
+/* === DID YOU KNOW CARDS === */
+.dyk-section {
+  margin-top: 48px;
+}
+
+.dyk-heading {
+  font-family: "Playfair Display", serif;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gold-2);
+  margin: 0 0 14px;
+  text-align: center;
+  opacity: 0.7;
+}
+
+.dyk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.dyk-card {
+  padding: 22px 20px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  transition: border-color 0.3s ease, transform 0.25s ease, box-shadow 0.4s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.dyk-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, rgba(201, 168, 76, 0.05), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.dyk-card:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 24px rgba(201, 168, 76, 0.06);
+}
+
+.dyk-card:hover::before { opacity: 1; }
+
+.dyk-stat {
+  font-family: "Playfair Display", serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gold-2);
+  line-height: 1;
+  margin-bottom: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+.dyk-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.dyk-body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .dyk-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 960px) and (min-width: 641px) {
+  .dyk-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* === REPORT DASHBOARD === */
@@ -1338,7 +1516,6 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
   gap: 16px;
   width: 100%;
   max-width: 220px;
-  transition: opacity 0.4s ease;
 }
 
 .proc-step {
@@ -1383,10 +1560,6 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
   flex-direction: column;
   align-items: center;
   gap: 12px;
-}
-
-.processing-steps.fade-in {
-  opacity: 0.5;
 }
 
 .proc-check {
