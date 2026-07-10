@@ -79,6 +79,33 @@ html, body {
   will-change: transform, opacity;
 }
 
+/* === NEBULA BACKGROUND === */
+.nebula-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nebula-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 15%, rgba(201, 168, 76, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 20% 50%, rgba(180, 120, 60, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 35% at 80% 40%, rgba(160, 100, 50, 0.025) 0%, transparent 45%);
+  pointer-events: none;
+}
+
+.nebula-blob {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
 /* === TYPOGRAPHY === */
 h1, h2, h3, h4 {
   font-family: "Playfair Display", Georgia, "Times New Roman", serif;
