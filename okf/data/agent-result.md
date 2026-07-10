@@ -4,7 +4,7 @@ title: AgentResult
 status: implemented
 description: The JSON output every agent returns — a score, sub-scores, a list of findings with severity/effort/impact, and optional artifacts (knowledge_graph, traffic_signal, crawl_reports).
 tags: [data, contract, agent, findings]
-timestamp: 2026-07-09T00:00:00Z
+timestamp: 2026-07-11T00:00:00Z
 ---
 
 # AgentResult
@@ -22,9 +22,11 @@ interface AgentResult {
   artifacts: Record<string, unknown>;          // agent-specific; entity agent returns { "knowledge_graph": {...} }
   traffic_signal: TrafficSignal | null;       // domain rank, cloudflare visits estimate
   crawl_reports: CrawlReport[];               // crawlability agent only
-  model_used: string;                         // e.g. "gemma-4-31b@fireworks"
+  model_used: string;                         // e.g. "accounts/fireworks/models/gemma-4-26b-a4b-it"
   latency_ms: number;                         // inference latency in ms
-  tokens: number;                             // tokens consumed
+  tokens: number;                             // total tokens consumed (prompt + completion)
+  prompt_tokens: number;                      // input/prompt tokens for the final judgment call
+  completion_tokens: number;                  // output tokens for the final judgment call
 }
 
 interface Finding {
@@ -73,6 +75,8 @@ Defined as TypeScript types in `frontend/lib/types.ts`. The backend contract is 
 - **Mock mode**: the `MOCK_REPORT` in `app/mock.py` includes findings with an `agent` field for attribution
 - **Real mode**: each agent (in `agents/app/agents/`) returns its AgentResult through the [Model Router](/components/model-router.md)
 - **Fallback**: the frontend's `composeFallbackReport` generates four synthetic AgentResults from SSE scores
+
+Every underlying LLM call (including retries and the aggregator's `report_writer` call, which has no `AgentResult` to attach to) is separately persisted by [Token Usage Logging](/components/token-logging.md) — see [Token Usage Record](/data/token-usage-record.md) for the full per-call log, which is a superset of what ends up in `tokens`/`prompt_tokens`/`completion_tokens` here.
 
 ## Agent-specific artifacts
 

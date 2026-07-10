@@ -22,7 +22,7 @@ import subprocess, time, os
 vllm_proc = subprocess.Popen(
     [
         "python", "-m", "vllm.entrypoints.openai.api_server",
-        "--model", "google/gemma-4-27b-it",   # or whatever model you have
+        "--model", "google/gemma-2-9b-it",   # heavy local model
         "--port", "8000",
         "--max-model-len", "8192",
         "--enable-auto-tool-choice",
@@ -101,7 +101,7 @@ for _ in range(15):
 # vllm_light = subprocess.Popen(
 #     [
 #         "python", "-m", "vllm.entrypoints.openai.api_server",
-#         "--model", "google/gemma-4-e4b-it",
+#         "--model", "google/gemma-2-2b-it",
 #         "--port", "8001",
 #         "--max-model-len", "8192",
 #     ],

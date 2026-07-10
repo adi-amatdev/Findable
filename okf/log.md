@@ -1,5 +1,23 @@
 # Update Log
 
+## 2026-07-11 (README architecture + Fireworks fallback + GPU deployment docs)
+* **Update**: README rewritten with a full Mermaid architecture diagram covering frontend, backend, crawl/fetch, deterministic extraction, SiteFacts, agents-api, four agents, crawlability sub-agent, Model Router, vLLM/Fireworks/Ollama fallback, token logging, SSE, AuditReport, and PDF export.
+* **Update**: Fireworks fallback models changed to `accounts/fireworks/models/gemma-4-26b-a4b-it` for heavy roles and `accounts/fireworks/models/gemma-4-e4b` for light roles. Updated `.env.example`, `agents/app/models/router.py`, `app/llm/roles.py`, `components/model-router.md`, and `external/fireworks-api.md`.
+* **Update**: README now documents Gemma licensing split: Gemma 4 Apache 2.0 license page for Fireworks fallbacks; earlier local Gemma 2 weights under Google's Gemma Terms of Use.
+* **Update**: README now embeds AMD SMI screenshots from `docs/assets/amd-smi/` showing idle, partial, and full GPU load, including full-load 100% utilization and ~43.7 GB VRAM usage.
+* **Update**: vLLM setup docs now point to `vllm_hosting/` (`download_model.py`, `download_cloudflare.txt`, `start_service.sh`, `stop_service.sh`, `load_test.py`) instead of stale `server_files/serve.sh` references. `components/vllm-server.md` and `components/index.md` updated.
+
+## 2026-07-11 (Gemma system-role fix + vLLM context length)
+* **Fix**: Discovered via `token_benchmark.py` that Gemma's chat template rejects a `system`-role message ("System role not supported"), so every real agent call against vLLM was 400ing and silently falling back to Fireworks/Ollama. Fixed in `AsyncLLMClient.chat_completion()` (`agents/app/models/client.py`) — new `_merge_system_message()` folds a leading `system` message into the following `user` message before every request, for every caller uniformly. `components/model-router.md` documents this under "Gemma chat-template compatibility".
+* **Note**: A second, separate issue found the same way — `content_signal` and `crawlability_judgment` request `max_tokens=3000` against a heavy vLLM server started with the vLLM default `max_model_len=4096`, which isn't enough combined with their ~1,000–1,100 token prompts. Not a code bug — it's a server startup flag. `components/vllm-server.md` documents the requirement and recommends `--max-model-len 6000` (sufficient given the agents' fixed prompt-truncation caps; 8192 is not necessary).
+
+## 2026-07-11 (token usage tracking + homepage copy fix)
+* **Creation**: Token usage logging added. Every LLM call routed through `ModelRouter.call_with_fallback()` now logs prompt/completion/total tokens (plus model, backend, agent, audit_id) to `agents/logs/token_usage.jsonl` via new `agents/app/token_logger.py` — closes the gap where the `report_writer` executive-summary call's token usage was read and discarded. New concepts: `components/token-logging.md`, `data/token-usage-record.md`.
+* **Update**: `data/agent-result.md` schema gained `prompt_tokens`/`completion_tokens` fields alongside the existing `tokens` total (additive, backward-compatible).
+* **Update**: `components/model-router.md` documents the new `agent`/`audit_id` params on `call_with_fallback` and the token-logging hook.
+* **Creation**: `agents/scripts/token_benchmark.py` — CLI benchmark against the two vLLM endpoints (heavy + light) using real prompt-building code, reports average tokens per agent role and per model. `agents/scripts/token_report.py` reads the JSONL log back for running per-agent/per-model averages.
+* **Fix**: Homepage "What is extracted" stat for JS dependency reworded from the formula fragment `"1 - raw / rendered text length ratio"` to plain language: `"Share of page text that only appears after JavaScript runs"` (`frontend/app/page.tsx`). The underlying formula (`1 - raw_len/rendered_len` in `app/extraction/extractor.py`) is unchanged and intentional — only the homepage copy was unclear.
+
 ## 2026-07-09 (frontend + pdf + docker fixes)
 * **Update**: PDF export implemented. `app/pdf.py` added — `fpdf2`-based backend generator with Latin-1 sanitiser (`_s()`), dual-format normaliser (mock/real), colour-coded score, visibility table with multipliers, verbose findings. `GET /api/audit/{audit_id}/pdf` endpoint streams `application/pdf`. `fpdf2>=2.7` added to `pyproject.toml`. `components/pdf-export.md` rewritten from `planned`/Playwright to `implemented`/fpdf2.
 * **Update**: Frontend score colours fixed. Category score bars now use score-based colours (red/amber/green) instead of hardwired per-agent colours. Agent result card borders also score-based. Agent column footer no longer displays intermediate score percentages.

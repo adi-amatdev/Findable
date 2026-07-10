@@ -36,7 +36,15 @@ class ContentSignalAgent(BaseAgent):
             {"role": "user", "content": prompt},
         ]
 
-    def parse_result(self, data: dict, latency_ms: float, model_used: str, tokens: int) -> AgentResult:
+    def parse_result(
+        self,
+        data: dict,
+        latency_ms: float,
+        model_used: str,
+        tokens: int,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+    ) -> AgentResult:
         sub_scores = data.get("sub_scores", {})
         if sub_scores:
             score = round(
@@ -66,4 +74,6 @@ class ContentSignalAgent(BaseAgent):
             model_used=model_used,
             latency_ms=round(latency_ms, 1),
             tokens=tokens,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )

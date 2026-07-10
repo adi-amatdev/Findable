@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -41,13 +42,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Agents SEO - Inference Layer", version="0.1.0", lifespan=lifespan)
 
 
-async def _run_agents(sitefacts: SiteFacts) -> list[AgentResult]:
+async def _run_agents(sitefacts: SiteFacts, audit_id: str | None = None) -> list[AgentResult]:
     """Run all 4 agents concurrently (no streaming)."""
     results = await asyncio.gather(
-        run_crawlability_agent(sitefacts),
-        ContentSignalAgent().run(sitefacts),
-        StructuredDataAgent().run(sitefacts),
-        EntityTopicAgent().run(sitefacts),
+        run_crawlability_agent(sitefacts, audit_id=audit_id),
+        ContentSignalAgent().run(sitefacts, audit_id=audit_id),
+        StructuredDataAgent().run(sitefacts, audit_id=audit_id),
+        EntityTopicAgent().run(sitefacts, audit_id=audit_id),
         return_exceptions=True,
     )
     agent_results: list[AgentResult] = []
@@ -73,10 +74,10 @@ async def _run_agents_tracked(
 
     try:
         results = await asyncio.gather(
-            run_crawlability_agent(sitefacts, agent_id=agent_ids.get("crawlability")),
-            ContentSignalAgent().run(sitefacts, agent_id=agent_ids.get("content_signal")),
-            StructuredDataAgent().run(sitefacts, agent_id=agent_ids.get("structured_data")),
-            EntityTopicAgent().run(sitefacts, agent_id=agent_ids.get("entity_topic")),
+            run_crawlability_agent(sitefacts, agent_id=agent_ids.get("crawlability"), audit_id=audit_id),
+            ContentSignalAgent().run(sitefacts, agent_id=agent_ids.get("content_signal"), audit_id=audit_id),
+            StructuredDataAgent().run(sitefacts, agent_id=agent_ids.get("structured_data"), audit_id=audit_id),
+            EntityTopicAgent().run(sitefacts, agent_id=agent_ids.get("entity_topic"), audit_id=audit_id),
             return_exceptions=True,
         )
         agent_results: list[AgentResult] = []
@@ -101,7 +102,8 @@ async def _run_agents_tracked(
 async def audit(sitefacts: SiteFacts) -> AuditReport:
     """Run the full 4-agent pipeline on a single SiteFacts object."""
     try:
-        agent_results = await _run_agents(sitefacts)
+        audit_id = str(uuid.uuid4())
+        agent_results = await _run_agents(sitefacts, audit_id=audit_id)
         report = await aggregate([(sitefacts, agent_results)])
         return report
     except Exception as exc:
@@ -119,7 +121,8 @@ async def audit_batch(sitefacts_list: list[SiteFacts]) -> list[AuditReport]:
 
 
 async def _run_single(sitefacts: SiteFacts) -> AuditReport:
-    agent_results = await _run_agents(sitefacts)
+    audit_id = str(uuid.uuid4())
+    agent_results = await _run_agents(sitefacts, audit_id=audit_id)
     return await aggregate([(sitefacts, agent_results)])
 
 

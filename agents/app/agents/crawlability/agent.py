@@ -100,7 +100,11 @@ def _build_judgment_prompt(
     )
 
 
-async def run_crawlability_agent(sitefacts: SiteFacts, agent_id: str | None = None) -> AgentResult:
+async def run_crawlability_agent(
+    sitefacts: SiteFacts,
+    agent_id: str | None = None,
+    audit_id: str | None = None,
+) -> AgentResult:
     async def _emit(phase: str, detail: str | None = None, score: int | None = None) -> None:
         if agent_id:
             await state.emit(agent_id, AgentStatusEvent(
@@ -143,6 +147,8 @@ async def run_crawlability_agent(sitefacts: SiteFacts, agent_id: str | None = No
     await _emit("judgment_call", detail="crawlability_judgment")
     response = await router.call_with_fallback(
         "crawlability_judgment",
+        agent="crawlability",
+        audit_id=audit_id,
         messages=messages,
         response_format={"type": "json_object"},
         guided_json=AGENT_RESULT_SCHEMA,
@@ -152,7 +158,10 @@ async def run_crawlability_agent(sitefacts: SiteFacts, agent_id: str | None = No
 
     latency_ms = (time.monotonic() - t0) * 1000
     model_used = response["choices"][0].get("model", "unknown")
-    tokens = response.get("usage", {}).get("total_tokens", 0)
+    usage = response.get("usage", {}) or {}
+    tokens = usage.get("total_tokens", 0)
+    prompt_tokens = usage.get("prompt_tokens", 0)
+    completion_tokens = usage.get("completion_tokens", 0)
 
     from app.models.client import _strip_markdown_fences
     raw_text = _strip_markdown_fences(response["choices"][0]["message"]["content"] or "{}")
@@ -184,4 +193,6 @@ async def run_crawlability_agent(sitefacts: SiteFacts, agent_id: str | None = No
         model_used=model_used,
         latency_ms=round(latency_ms, 1),
         tokens=tokens,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
     )
