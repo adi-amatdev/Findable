@@ -1,8 +1,13 @@
 # Update Log
 
+## 2026-07-11 (Fireworks serverless fallback + guided JSON translation)
+* **Fix**: Fireworks Gemma-family pages checked for this project (`gemma-4-26b-a4b-it`, `gemma-4-e4b`, `gemma-3-27b-it`) mark serverless as "Not supported", so the no-deployment Fireworks fallback defaults were changed to serverless models: heavy `accounts/fireworks/models/gpt-oss-120b`, light `accounts/fireworks/models/gpt-oss-20b`. Gemma Fireworks paths remain documented as optional on-demand deployment overrides.
+* **Fix**: `AsyncLLMClient.chat_completion()` now treats `guided_json` by backend: keeps `guided_json` for vLLM, translates it to Fireworks `response_format: {"type":"json_schema", ...}`, and omits it for Ollama. Added tests for vLLM/Fireworks/Ollama payload construction.
+* **Creation**: Added `docs/fireworks_serverless_pricing.md` with Fireworks serverless pricing, Gemma serverless availability findings, selected fallback models, and an approximate one-pass audit cost estimate (~$0.0062 using current token caps).
+
 ## 2026-07-11 (README architecture + Fireworks fallback + GPU deployment docs)
 * **Update**: README rewritten with a full Mermaid architecture diagram covering frontend, backend, crawl/fetch, deterministic extraction, SiteFacts, agents-api, four agents, crawlability sub-agent, Model Router, vLLM/Fireworks/Ollama fallback, token logging, SSE, AuditReport, and PDF export.
-* **Update**: Fireworks fallback models changed to `accounts/fireworks/models/gemma-4-26b-a4b-it` for heavy roles and `accounts/fireworks/models/gemma-4-e4b` for light roles. Updated `.env.example`, `agents/app/models/router.py`, `app/llm/roles.py`, `components/model-router.md`, and `external/fireworks-api.md`.
+* **Update**: Fireworks Gemma 4 paths (`accounts/fireworks/models/gemma-4-26b-a4b-it`, `accounts/fireworks/models/gemma-4-e4b`) documented as optional on-demand deployment overrides before the later serverless check changed no-deployment defaults to GPT OSS models. Updated `.env.example`, `agents/app/models/router.py`, `app/llm/roles.py`, `components/model-router.md`, and `external/fireworks-api.md`.
 * **Update**: README now documents Gemma licensing split: Gemma 4 Apache 2.0 license page for Fireworks fallbacks; earlier local Gemma 2 weights under Google's Gemma Terms of Use.
 * **Update**: README now embeds AMD SMI screenshots from `docs/assets/amd-smi/` showing idle, partial, and full GPU load, including full-load 100% utilization and ~43.7 GB VRAM usage.
 * **Update**: vLLM setup docs now point to `vllm_hosting/` (`download_model.py`, `download_cloudflare.txt`, `start_service.sh`, `stop_service.sh`, `load_test.py`) instead of stale `server_files/serve.sh` references. `components/vllm-server.md` and `components/index.md` updated.
