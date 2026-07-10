@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from "react";
 import * as THREE from "three";
 
 const vertexShader = `
@@ -48,58 +48,60 @@ const vertexShader = `
     float seed = uSeed;
     float t = uTime;
 
-    // === DOWNWARD FLOW: positive = downward in wave phase ===
-    float flowSpeed = 0.8 + pulse * 1.2;
+    // Ambient base — always alive, one-directional breathing
+    float ambient = max(sin(t * 0.25 + seed * 3.7), 0.0);
+
+    // Flow speed: always moving, pulse boosts it
+    float flowSpeed = 0.7 + ambient * 0.15 + pulse * 1.5;
     float flow = t * flowSpeed;
 
-    // === STREAM CURVES: meandering horizontal offset along a vertical path ===
-    // Like a river bending left and right as it flows down
-    float meander1 = sin(pos.y * 0.6 + t * 0.12 + seed) * 1.8;
-    float meander2 = sin(pos.y * 0.25 + t * 0.06 + seed * 2.3) * 0.9;
-    float meanderX = meander1 + meander2;
+    // === MEANDER: static vertical curve along X — no time oscillation ===
+    float meander1 = sin(pos.x * 0.4 + seed) * 1.5;
+    float meander2 = sin(pos.x * 0.15 + seed * 2.3) * 0.7;
+    float meanderY = meander1 + meander2;
 
-    // === VERTICAL BANDS: broad stripes flowing downward, curving with meander ===
-    float band1 = sin((pos.x + meanderX * 0.4) * 0.8 + flow * 0.5 + seed) * 0.6;
-    float band2 = sin((pos.x + meanderX * 0.25) * 0.45 - flow * 0.35 + seed * 1.7) * 0.5;
-    float band3 = sin((pos.x + meanderX * 0.6) * 1.1 + flow * 0.7 + seed * 3.1) * 0.35;
+    // === HORIZONTAL BANDS: one-directional flow right ===
+    // max(sin, 0) = only positive peaks flow right, never reverses
+    float band1 = max(sin((pos.y + meanderY * 0.35) * 0.7 + flow * 0.45 + seed), 0.0) * 0.55;
+    float band2 = max(sin((pos.y + meanderY * 0.2) * 0.4 + flow * 0.3 + seed * 1.7), 0.0) * 0.45;
+    float band3 = max(sin((pos.y + meanderY * 0.5) * 0.95 + flow * 0.6 + seed * 3.1), 0.0) * 0.3;
 
-    // === WIDE CURTAIN: very broad shape that breathes ===
-    float curtain = sin(pos.x * 0.15 + meanderX * 0.1 + t * 0.04 + seed * 0.8) * 0.7;
+    // Broad curtain: one-directional
+    float curtain = max(sin(pos.y * 0.12 + meanderY * 0.08 + flow * 0.02 + seed * 0.8), 0.0) * (0.5 + ambient * 0.2);
 
-    // === VERTICAL FADE: full screen, gentle top/bottom ===
+    // Vertical fade
     float vertFade = smoothstep(-1.8, 0.2, uv.y) * smoothstep(1.8, 0.2, uv.y);
 
-    // === ELEVATION ===
+    // Elevation
     float elevation = (band1 + band2 + band3 + curtain) * vertFade;
-    elevation *= (1.0 + pulse * 0.8);
+    elevation *= (1.0 + pulse * 0.7);
 
-    // === 3D NOISE: soft organic displacement, mostly vertical ===
-    vec3 noiseCoord = vec3(pos.xy * 0.15 + seed * 10.0, flow * 0.08);
+    // === 3D NOISE: vertical ripples + depth, no lateral ===
+    vec3 noiseCoord = vec3(pos.xy * 0.12 + seed * 10.0, flow * 0.07);
     float n1 = fbm(noiseCoord) * 2.0 - 1.0;
     float n2 = fbm(noiseCoord + vec3(5.2, 1.3, 2.8)) * 2.0 - 1.0;
     float n3 = fbm(noiseCoord + vec3(9.7, 4.1, 6.3)) * 2.0 - 1.0;
 
-    float chaosMix = 0.1 + pulse * 0.9;
+    float chaosMix = 0.08 + pulse * 0.92;
 
-    // Gentle horizontal sway from noise
-    pos.x += n1 * 0.2 * chaosMix * vertFade;
-    // Slight vertical compression during flow
-    pos.y += n2 * 0.06 * chaosMix * vertFade;
-    // Depth undulation — broad, not fine
+    // Vertical ripple displacement
+    pos.y += n2 * 0.12 * chaosMix * vertFade;
+    // Depth undulation
     pos.z += n3 * 0.35 * chaosMix * vertFade;
 
-    // === PULSE: wave swing and twist ===
-    float pulseSwing = sin(pos.y * 0.8 + t * 0.3 + seed * 4.0) * pulse * 0.25;
-    pos.x += pulseSwing * vertFade;
+    // Pulse: vertical surge — one direction only
+    float pulseSwing = max(sin(pos.x * 0.7 + flow * 0.15 + seed * 4.0), 0.0) * pulse * 0.2;
+    pos.y += pulseSwing * vertFade;
 
-    float twist = sin(pos.y * 0.7 + t * 0.15) * pulse * 0.12 * vertFade;
-    pos.x += twist;
+    // Pulse: depth ripple — one direction only
+    float pulseDepth = max(sin(pos.x * 0.5 + flow * 0.1 + seed * 2.0), 0.0) * pulse * 0.15;
+    pos.z += pulseDepth * vertFade;
 
-    // === LUMINOSITY: broad flowing zones ===
-    float lumNoise = fbm(vec3(pos.xy * 0.1, flow * 0.06 + seed));
-    vLuminosity = lumNoise * (0.6 + pulse * 1.4);
+    // Luminosity: broad zones flowing downward + noise variation
+    float lumNoise = fbm(vec3(pos.xy * 0.08, flow * 0.05 + seed));
+    vLuminosity = lumNoise * (0.5 + pulse * 1.5) + ambient * 0.15 + n1 * 0.1;
 
-    elevation += n3 * 0.18 * chaosMix * vertFade;
+    elevation += n3 * 0.15 * chaosMix * vertFade;
     vElevation = elevation;
     vWorldPos = pos;
 
@@ -147,59 +149,55 @@ const fragmentShader = `
     float seed = uSeed;
     float t = uTime;
 
-    float flowSpeed = 0.8 + pulse * 1.2;
+    float ambient = max(sin(t * 0.25 + seed * 3.7), 0.0);
+    float flowSpeed = 0.7 + ambient * 0.15 + pulse * 1.5;
     float flow = t * flowSpeed;
 
-    // Meander for band alignment
-    float meander1 = sin(vWorldPos.y * 0.6 + t * 0.12 + seed) * 1.8;
-    float meander2 = sin(vWorldPos.y * 0.25 + t * 0.06 + seed * 2.3) * 0.9;
-    float meanderX = meander1 + meander2;
+    float meander1 = sin(vWorldPos.x * 0.4 + seed) * 1.5;
+    float meander2 = sin(vWorldPos.x * 0.15 + seed * 2.3) * 0.7;
+    float meanderY = meander1 + meander2;
 
-    // === BASE COLOR ===
-    vec3 color = mix(uBaseColor, uPeakColor, pulse * 0.5);
+    // Base color: always slightly alive from ambient
+    vec3 color = mix(uBaseColor, uPeakColor, (pulse * 0.5 + ambient * 0.15));
 
-    // === LUMINOSITY ZONES: soft flowing blobs ===
-    vec2 lumCoord = vWorldPos.xy * 0.12 + seed * 7.0;
-    float hotSpot1 = fbm2(lumCoord + vec2(meanderX * 0.02, flow * 0.05));
-    float hotSpot2 = fbm2(lumCoord * 1.3 + vec2(-meanderX * 0.015, flow * 0.04) + 3.14);
-    float hotSpot3 = noise(lumCoord * 1.8 + vec2(t * 0.03, flow * 0.03));
+    // Luminosity: soft flowing blobs, one-directional right
+    vec2 lumCoord = vWorldPos.xy * 0.1 + seed * 7.0;
+    float hotSpot1 = fbm2(lumCoord + vec2(flow * 0.04, meanderY * 0.015));
+    float hotSpot2 = fbm2(lumCoord * 1.2 + vec2(flow * 0.035, -meanderY * 0.01) + 3.14);
+    float hotSpot3 = noise(lumCoord * 1.6 + vec2(flow * 0.025, 0.0));
 
     float luminosity = hotSpot1 * 0.5 + hotSpot2 * 0.3 + hotSpot3 * 0.2;
-    luminosity = luminosity * (0.5 + pulse * 1.0);
+    luminosity = luminosity * (0.4 + pulse * 1.1 + ambient * 0.2);
 
-    // === BROAD BANDS: smooth river-like highlights ===
-    float bandA = sin((vWorldPos.x + meanderX * 0.4) * 0.8 + flow * 0.5 + seed);
-    float bandB = sin((vWorldPos.x + meanderX * 0.25) * 0.45 - flow * 0.35 + seed * 1.7);
-    float bandC = sin((vWorldPos.x + meanderX * 0.6) * 1.1 + flow * 0.7 + seed * 3.1);
+    // Broad horizontal bands flowing right — one-directional
+    float bandA = max(sin((vWorldPos.y + meanderY * 0.35) * 0.7 + flow * 0.45 + seed), 0.0);
+    float bandB = max(sin((vWorldPos.y + meanderY * 0.2) * 0.4 + flow * 0.3 + seed * 1.7), 0.0);
+    float bandC = max(sin((vWorldPos.y + meanderY * 0.5) * 0.95 + flow * 0.6 + seed * 3.1), 0.0);
 
     float bandVal = smoothstep(0.1, 0.9, bandA) * 0.4
                   + smoothstep(0.2, 0.95, bandB) * 0.35
                   + smoothstep(0.0, 0.85, bandC) * 0.25;
-    float bandBrightness = bandVal * (0.3 + pulse * 1.0);
+    float bandBrightness = bandVal * (0.25 + pulse * 1.0 + ambient * 0.15);
 
-    // === ELEVATION GLOW ===
     float elevGlow = smoothstep(-0.5, 1.0, vElevation);
 
-    // === COLOR TEMPERATURE: warm peaks, cool valleys ===
     vec3 warmTint = vec3(1.06, 0.96, 0.82);
     vec3 coolTint = vec3(0.86, 0.92, 1.06);
     float tempMix = smoothstep(-0.2, 0.5, vElevation + luminosity * 0.25);
     vec3 tempTint = mix(coolTint, warmTint, tempMix);
 
-    // === APPLY ===
     color *= tempTint;
     color += elevGlow * luminosity * vec3(0.2, 0.16, 0.08) * (1.0 + pulse * 1.5);
     color += bandBrightness * vec3(0.3, 0.24, 0.1);
 
-    // === VERTICAL GRADIENT: dimmer at bottom for depth ===
     float vertGrad = mix(0.5, 1.0, vUv.y);
     color *= vertGrad;
 
-    // === ALPHA: low for text visibility, pulse adds gentle fullness ===
-    float alpha = mix(0.03, 0.12, pulse);
+    // Alpha: always visible, pulse adds fullness
+    float alpha = mix(0.03, 0.14, pulse + ambient * 0.15);
     alpha += elevGlow * 0.04;
     alpha += bandBrightness * 0.03;
-    alpha *= (0.6 + luminosity * 0.4);
+    alpha *= (0.55 + luminosity * 0.45);
     alpha *= vertGrad;
 
     gl_FragColor = vec4(color, alpha);
@@ -208,6 +206,10 @@ const fragmentShader = `
 
 export interface ShaderBackgroundHandle {
   triggerPulse: (intensity?: number, duration?: number) => void;
+  /** Start spontaneous auto-pulsing. Call when audit begins. */
+  startAutoPulse: () => void;
+  /** Stop auto-pulsing. Call when returning to idle or showing report. */
+  stopAutoPulse: () => void;
 }
 
 interface PulseState {
@@ -221,6 +223,8 @@ interface PulseState {
 const ShaderBackground = forwardRef<ShaderBackgroundHandle>(function ShaderBackground(_, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
+  const autoPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoPulseActiveRef = useRef(false);
   const pulseRef = useRef<PulseState>({
     active: false,
     start: 0,
@@ -229,8 +233,34 @@ const ShaderBackground = forwardRef<ShaderBackgroundHandle>(function ShaderBackg
     decayDuration: 4000,
   });
 
+  const triggerPulseInternal = useCallback((intensity: number, duration: number) => {
+    // If already pulsing, only override if new intensity is higher
+    if (pulseRef.current.active) return;
+    pulseRef.current = {
+      active: true,
+      start: performance.now(),
+      buildDuration: duration * 0.45,
+      holdDuration: duration * 0.1,
+      decayDuration: duration * 0.45,
+    };
+  }, []);
+
+  const scheduleNextAutoPulse = useCallback(() => {
+    if (!autoPulseActiveRef.current) return;
+    // Random interval: 1.5–5 seconds between spontaneous pulses
+    const delay = 1500 + Math.random() * 3500;
+    autoPulseTimerRef.current = setTimeout(() => {
+      if (!autoPulseActiveRef.current) return;
+      // Random intensity 0.25–0.65, duration 2–5 seconds
+      const intensity = 0.25 + Math.random() * 0.4;
+      const duration = 2000 + Math.random() * 3000;
+      triggerPulseInternal(intensity, duration);
+      scheduleNextAutoPulse();
+    }, delay);
+  }, [triggerPulseInternal]);
+
   useImperativeHandle(ref, () => ({
-    triggerPulse(_intensity = 0.7, duration = 6000) {
+    triggerPulse(intensity = 0.7, duration = 6000) {
       pulseRef.current = {
         active: true,
         start: performance.now(),
@@ -238,6 +268,18 @@ const ShaderBackground = forwardRef<ShaderBackgroundHandle>(function ShaderBackg
         holdDuration: duration * 0.1,
         decayDuration: duration * 0.45,
       };
+    },
+    startAutoPulse() {
+      if (autoPulseActiveRef.current) return;
+      autoPulseActiveRef.current = true;
+      scheduleNextAutoPulse();
+    },
+    stopAutoPulse() {
+      autoPulseActiveRef.current = false;
+      if (autoPulseTimerRef.current) {
+        clearTimeout(autoPulseTimerRef.current);
+        autoPulseTimerRef.current = null;
+      }
     },
   }));
 
@@ -349,6 +391,7 @@ const ShaderBackground = forwardRef<ShaderBackgroundHandle>(function ShaderBackg
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", onResize);
+      if (autoPulseTimerRef.current) clearTimeout(autoPulseTimerRef.current);
       meshes.forEach((m) => {
         m.geometry.dispose();
         (m.material as THREE.ShaderMaterial).dispose();

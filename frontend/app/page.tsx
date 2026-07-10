@@ -171,7 +171,6 @@ export default function Home() {
   const decoRef = useRef<SVGSVGElement | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
   const bgRef = useRef<ShaderBackgroundHandle>(null);
-  const streamPulseRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const path = decoRef.current?.querySelector("path");
@@ -242,7 +241,6 @@ export default function Home() {
 
   useEffect(() => () => {
     closers.current.forEach((c) => c());
-    if (streamPulseRef.current) clearInterval(streamPulseRef.current);
   }, []);
 
   async function onSubmit(e: FormEvent) {
@@ -257,6 +255,7 @@ export default function Home() {
     lastPhases.current = {};
     setStage("crawling");
     bgRef.current?.triggerPulse(0.4, 5000);
+    bgRef.current?.startAutoPulse();
 
     const ac = new AbortController();
     abortRef.current = ac;
@@ -269,6 +268,7 @@ export default function Home() {
     } catch (err: unknown) {
       if (ac.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Something went wrong.");
+      bgRef.current?.stopAutoPulse();
       setStage("idle");
       return;
     }
@@ -284,6 +284,7 @@ export default function Home() {
     } catch (err: unknown) {
       if (ac.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Something went wrong.");
+      bgRef.current?.stopAutoPulse();
       setStage("idle");
       return;
     }
@@ -291,10 +292,6 @@ export default function Home() {
     if (ac.signal.aborted) return;
     setStage("judging");
     bgRef.current?.triggerPulse(0.5, 6000);
-    // Gentle repeating pulse while agents stream
-    streamPulseRef.current = setInterval(() => {
-      bgRef.current?.triggerPulse(0.3, 4000);
-    }, 5500);
 
     closers.current.forEach((c) => c());
     closers.current = AGENTS.map((a) =>
@@ -337,7 +334,7 @@ export default function Home() {
     auditIdRef.current = null;
     closers.current.forEach((c) => c());
     closers.current = [];
-    if (streamPulseRef.current) { clearInterval(streamPulseRef.current); streamPulseRef.current = null; }
+    bgRef.current?.stopAutoPulse();
     setAgentsDone(false);
     setContinueReady(false);
     setStage("idle");
@@ -351,12 +348,12 @@ export default function Home() {
     const t2 = setTimeout(() => setProcessingStep(2), 400 + 1500);
     const t3 = setTimeout(() => setProcessingStep(3), 400 + 3000);
     const t4 = setTimeout(() => setProcessingStep(4), 400 + 4500);
-    const t5 = setTimeout(() => { setStage("report"); bgRef.current?.triggerPulse(0.6, 7000); }, 400 + 6500);
+    const t5 = setTimeout(() => { setStage("report"); bgRef.current?.stopAutoPulse(); bgRef.current?.triggerPulse(0.6, 7000); }, 400 + 6500);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
   }, [stage, report]);
 
   function onContinue() {
-    if (streamPulseRef.current) { clearInterval(streamPulseRef.current); streamPulseRef.current = null; }
+    bgRef.current?.stopAutoPulse();
     bgRef.current?.triggerPulse(0.55, 5000);
     const cols = columnsRef.current?.querySelectorAll(".agent-col");
     if (cols && cols.length) {
