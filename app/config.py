@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # --- LLM / Model Router ---
     # Master switch. When false, agents run in deterministic heuristic mode
-    # (no external model calls) — the whole audit still runs end-to-end.
+    # (no external model calls) - the whole audit still runs end-to-end.
     llm_enabled: bool = False
     llm_timeout: float = 60.0
     # Local vLLM (OpenAI-compatible). In docker-compose this points at the

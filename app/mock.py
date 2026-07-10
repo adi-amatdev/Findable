@@ -109,7 +109,7 @@ MOCK_SITEFACTS = SiteFacts(
         content_visible_without_js=False,
     ),
     html=HtmlFacts(
-        title="Example Domain — Products & Services",
+        title="Example Domain - Products & Services",
         meta_description="We help companies grow. Trusted by 10,000 teams worldwide.",
         canonical="https://mock.example.com/",
         lang="en",
@@ -143,8 +143,8 @@ MOCK_SITEFACTS = SiteFacts(
         "# Welcome to Example\n\n"
         "We help companies grow. Trusted by 10,000 teams worldwide.\n\n"
         "## Our Products\n\n"
-        "- Product Alpha — enterprise analytics\n"
-        "- Product Beta — workflow automation\n\n"
+        "- Product Alpha - enterprise analytics\n"
+        "- Product Beta - workflow automation\n\n"
         "## Why Choose Us\n\n"
         "Fast, reliable, and secure. Our platform scales with your business.\n\n"
         "### Customer Stories\n\n"
@@ -302,7 +302,7 @@ async def _run_one_agent(agent_id: str, agent_name: str, started_at: float) -> N
 async def run_mock_audit(audit_id: str, agent_ids: dict[str, str]) -> None:
     """
     Fire all four fake agent timelines in parallel, then store the mock report.
-    Called via asyncio.create_task — runs in the background.
+    Called via asyncio.create_task - runs in the background.
     """
     started_at = time.time()
     tasks = [

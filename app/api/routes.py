@@ -1,13 +1,13 @@
 """API routes.
 
 Implemented:
-- POST /api/sitefacts        — the URL -> SiteFacts pipeline (the deliverable).
-- POST /api/audit            — SiteFacts pipeline + forward to agents-api for full audit (blocking).
-- POST /api/audit/start      — async variant: returns agent_ids immediately for SSE streaming.
-- GET  /agent/stream/{id}    — SSE proxy: streams AgentStatusEvents from agents-api to frontend.
-- GET  /api/audit/{id}       — poll proxy: returns AuditReport once agents finish (or 202).
-- POST /scrape               — raw Firecrawl passthrough (debug utility).
-- GET  /health, GET /        — meta.
+- POST /api/sitefacts        - the URL -> SiteFacts pipeline (the deliverable).
+- POST /api/audit            - SiteFacts pipeline + forward to agents-api for full audit (blocking).
+- POST /api/audit/start      - async variant: returns agent_ids immediately for SSE streaming.
+- GET  /agent/stream/{id}    - SSE proxy: streams AgentStatusEvents from agents-api to frontend.
+- GET  /api/audit/{id}       - poll proxy: returns AuditReport once agents finish (or 202).
+- POST /scrape               - raw Firecrawl passthrough (debug utility).
+- GET  /health, GET /        - meta.
 """
 
 from __future__ import annotations
@@ -298,7 +298,7 @@ async def scrape(
     req: ScrapeRequest,
     client: FirecrawlClient = Depends(get_firecrawl),
 ):
-    """Raw Firecrawl passthrough — inspect exactly what the crawler returns."""
+    """Raw Firecrawl passthrough - inspect exactly what the crawler returns."""
     options = req.options.model_dump(by_alias=True, exclude_none=True)
     try:
         data = await client.scrape(str(req.url), options)

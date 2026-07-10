@@ -1,7 +1,7 @@
 """Deterministic extraction: RawCrawl -> SiteFacts.
 
 Every field is derived in plain code (BeautifulSoup / lxml / regex). No LLM.
-The same RawCrawl always yields the same SiteFacts — reproducibility is what
+The same RawCrawl always yields the same SiteFacts - reproducibility is what
 makes the downstream score trustworthy.
 
 Scoping notes (vs the spec's ideal libraries):

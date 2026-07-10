@@ -3,7 +3,7 @@ import { AI_BOTS } from "../lib/types";
 import { Bool, Card, Chip, Chips, Meter, Stat } from "./ui";
 
 function truncate(s: string, n = 90): string {
-  if (!s) return "—";
+  if (!s) return "-";
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
@@ -22,8 +22,8 @@ export default function SiteFactsView({ facts }: { facts: SiteFacts }) {
     <div>
       <div className="summary animate-in">
         <span className="u">{f.final_url || f.url}</span>
-        <span className="m">HTTP {f.http.status || "—"}</span>
-        <span className="m">{f.http.content_type?.split(";")[0] || "—"}</span>
+        <span className="m">HTTP {f.http.status || "-"}</span>
+        <span className="m">{f.http.content_type?.split(";")[0] || "-"}</span>
         <span className="m">{f.http.latency_ms} ms</span>
       </div>
 
@@ -47,7 +47,7 @@ export default function SiteFactsView({ facts }: { facts: SiteFacts }) {
 
         <Card
           title="JavaScript dependency"
-          hint="Share of content injected by JS — invisible to AI crawlers that don't run it"
+          hint="Share of content injected by JS - invisible to AI crawlers that don't run it"
         >
           <Meter
             value={f.render.js_dependency_ratio}
@@ -85,7 +85,7 @@ export default function SiteFactsView({ facts }: { facts: SiteFacts }) {
             v={<span title={f.html.meta_description}>{truncate(f.html.meta_description, 60)}</span>}
           />
           <Stat k="Canonical" v={<Bool value={!!f.html.canonical} yes="set" no="none" />} />
-          <Stat k="Language" v={f.html.lang || "—"} />
+          <Stat k="Language" v={f.html.lang || "-"} />
           <Stat k="Word count" v={f.html.word_count} />
           <Stat k="Headings" v={`${f.html.outline.length} (${h1Count}× H1)`} />
           <Stat
@@ -108,8 +108,8 @@ export default function SiteFactsView({ facts }: { facts: SiteFacts }) {
         <Card title="Authorship &amp; freshness" hint="E-E-A-T signals answer engines favour">
           <Stat k="Byline present" v={<Bool value={f.authorship.byline_present} />} />
           <Stat k="Author schema" v={<Bool value={f.authorship.author_schema} />} />
-          <Stat k="Published" v={f.authorship.dates.published || "—"} />
-          <Stat k="Modified" v={f.authorship.dates.modified || "—"} />
+          <Stat k="Published" v={f.authorship.dates.published || "-"} />
+          <Stat k="Modified" v={f.authorship.dates.modified || "-"} />
         </Card>
 
         <Card title="Sitemap &amp; llms.txt">

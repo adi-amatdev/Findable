@@ -5,7 +5,7 @@ Accepts a raw AuditReport dict (either mock/flat format or real agents-api forma
 and returns a bytes object containing a fully self-contained PDF.
 
 Formatting principles:
-  - Helvetica throughout — zero external font dependencies
+  - Helvetica throughout - zero external font dependencies
   - A4 page size, 18 mm margins
   - Gold rule (#D4AF37) for section dividers
   - Colour-coded severity: Critical=#C44A4A, High=#D4A030, Medium=#B8860B, Low=#2E7D32
@@ -22,11 +22,11 @@ from typing import Any
 from fpdf import FPDF
 
 # ---------------------------------------------------------------------------
-# Latin-1 sanitiser — Helvetica core font is limited to Latin-1
+# Latin-1 sanitiser - Helvetica core font is limited to Latin-1
 # ---------------------------------------------------------------------------
 
 _REPLACE = {
-    "—": "-",  # em dash
+    "-": "-",  # em dash
     "–": "-",  # en dash
     "‘": "'",  # left single quote
     "’": "'",  # right single quote
@@ -78,7 +78,7 @@ EFFORT_LABEL = {"S": "Quick fix", "M": "Moderate", "L": "Large"}
 
 
 # ---------------------------------------------------------------------------
-# Normalise — handle both mock (flat) and real (nested) AuditReport shapes
+# Normalise - handle both mock (flat) and real (nested) AuditReport shapes
 # ---------------------------------------------------------------------------
 
 def _normalise(data: dict[str, Any]) -> dict[str, Any]:
@@ -338,7 +338,7 @@ def build_pdf(raw: dict[str, Any]) -> bytes:
         SEV_LABEL = {4: "CRITICAL", 3: "HIGH", 2: "MEDIUM", 1: "LOW"}
 
         for i, f in enumerate(findings, 1):
-            # Check remaining space — force page break if < 50mm left
+            # Check remaining space - force page break if < 50mm left
             if pdf.get_y() > 240:
                 pdf.add_page()
 

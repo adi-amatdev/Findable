@@ -2,7 +2,7 @@
 // Connects to: {apiBase}/agent/stream/{agentId}
 // which the main API (FastAPI) proxies to the agents-api.
 //
-// Wire format (OKF — see okf/components/streaming.md):
+// Wire format (OKF - see okf/components/streaming.md):
 //   event: agent_status
 //   data: {"agent_id":"<uuid>","agent":"<name>","phase":"<phase>","detail":"...","score":null,"ts":...}
 //

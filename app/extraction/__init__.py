@@ -1,4 +1,4 @@
-"""Deterministic Extraction — turns a RawCrawl into a SiteFacts object.
+"""Deterministic Extraction - turns a RawCrawl into a SiteFacts object.
 
 No LLM. Design Principle 1 (Deterministic–LLM Separation): if a Python library
 can answer it, it does not go to a model. See okf/components/extraction.md.

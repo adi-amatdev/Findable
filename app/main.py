@@ -1,4 +1,4 @@
-"""Findable — FastAPI app. Implements the URL -> SiteFacts pipeline."""
+"""Findable - FastAPI app. Implements the URL -> SiteFacts pipeline."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title=f"{settings.app_name} — Agents SEO/AEO",
+    title=f"{settings.app_name} - Agents SEO/AEO",
     version="0.1.0",
     description=(
         "URL in, SiteFacts out. A URL is crawled (Firecrawl rendered + direct "

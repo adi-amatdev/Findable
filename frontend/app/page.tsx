@@ -31,11 +31,11 @@ const WIKI: Record<string, WikiEntry> = {
     sections: [
       {
         heading: "The gathering",
-        body: "Two fetchers work in unison: Firecrawl renders the page as a browser would, while direct HTTP fetches the raw source. Together they pull robots.txt, sitemap.xml, and llms.txt — all in parallel.",
+        body: "Two fetchers work in unison: Firecrawl renders the page as a browser would, while direct HTTP fetches the raw source. Together they pull robots.txt, sitemap.xml, and llms.txt - all in parallel.",
       },
       {
         heading: "Why twice?",
-        body: "The raw vs rendered text-length ratio is the most revealing signal in the audit. If raw is much shorter than rendered, content is gated behind JavaScript — invisible to AI crawlers that don't execute JS.",
+        body: "The raw vs rendered text-length ratio is the most revealing signal in the audit. If raw is much shorter than rendered, content is gated behind JavaScript - invisible to AI crawlers that don't execute JS.",
       },
       {
         heading: "What is collected",
@@ -53,7 +53,7 @@ const WIKI: Record<string, WikiEntry> = {
     sections: [
       {
         heading: "Plain code, no models",
-        body: "Every signal here is extracted by deterministic Python — no LLM in the loop. This guarantees reproducibility: the same URL always yields identical SiteFacts. The four agents downstream all read from this single source of truth.",
+        body: "Every signal here is extracted by deterministic Python - no LLM in the loop. This guarantees reproducibility: the same URL always yields identical SiteFacts. The four agents downstream all read from this single source of truth.",
       },
       {
         heading: "What is extracted",
@@ -93,7 +93,7 @@ const WIKI: Record<string, WikiEntry> = {
     sections: [
       {
         heading: "From judgments to score",
-        body: "The four agent verdicts are weighted into a 0–100 AI Readiness Score. Hard gates cap the overall score on critical failures — no amount of good schema helps if all AI bots are blocked.",
+        body: "The four agent verdicts are weighted into a 0–100 AI Readiness Score. Hard gates cap the overall score on critical failures - no amount of good schema helps if all AI bots are blocked.",
       },
       {
         heading: "Weighting",
@@ -113,7 +113,7 @@ const WIKI: Record<string, WikiEntry> = {
 };
 
 const STORY: Array<[string, string]> = [
-  ["Crawl", "Two fetchers in parallel — rendered, raw, robots, sitemap, llms.txt."],
+  ["Crawl", "Two fetchers in parallel - rendered, raw, robots, sitemap, llms.txt."],
   ["Facts", "Deterministic extraction distils raw signals into structured SiteFacts."],
   ["Judge", "Four concurrent agents each argue one dimension of AI-readiness."],
   ["Report", "Weighted aggregation into a scored, readable audit report."],
@@ -354,8 +354,8 @@ export default function Home() {
       <section className={`hero2 ${compact ? "compact" : ""}`}>
         <h1>Findable</h1>
         <p className="tagline">
-          Search is becoming answers. Findable audits whether AI — ChatGPT, Claude,
-          Perplexity — can actually <em>read, trust and cite</em> your page.
+          Search is becoming answers. Findable audits whether AI - ChatGPT, Claude,
+          Perplexity - can actually <em>read, trust and cite</em> your page.
         </p>
 
         <svg
@@ -616,7 +616,7 @@ function composeFallbackReport(
   const agentScores: Record<string, number> = {};
   for (const a of AGENTS) {
     const s = agents[a.id]?.score;
-    agentScores[a.id] = s ?? 50; // neutral default — never random
+    agentScores[a.id] = s ?? 50; // neutral default - never random
   }
   const findings: AuditReport["findings"] = [
     { id: "crawl-01", title: "High JS dependency hides content from text-only crawlers", severity: 4, effort: "M", impact: 4,

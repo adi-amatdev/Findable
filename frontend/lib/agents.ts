@@ -1,4 +1,4 @@
-// The four judges — ids match the agents-api (okf/agents/).
+// The four judges - ids match the agents-api (okf/agents/).
 
 export interface AgentMeta {
   id: string;

@@ -1,5 +1,5 @@
 """
-FastAPI service — receives SiteFacts, runs 4 agents + aggregator, returns AuditReport.
+FastAPI service - receives SiteFacts, runs 4 agents + aggregator, returns AuditReport.
 
 POST /audit                  → run full pipeline (sync, waits for result)
 POST /audit/start            → fire-and-forget, returns agent_ids immediately for SSE streaming
@@ -34,11 +34,11 @@ log = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     availability = await router_module.probe_backends()
     available = [k for k, v in availability.items() if v]
-    log.info("Model backends ready: %s", available or ["none — all requests will fail"])
+    log.info("Model backends ready: %s", available or ["none - all requests will fail"])
     yield
 
 
-app = FastAPI(title="Agents SEO — Inference Layer", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Agents SEO - Inference Layer", version="0.1.0", lifespan=lifespan)
 
 
 async def _run_agents(sitefacts: SiteFacts) -> list[AgentResult]:
@@ -111,7 +111,7 @@ async def audit(sitefacts: SiteFacts) -> AuditReport:
 
 @app.post("/audit/batch", response_model=list[AuditReport])
 async def audit_batch(sitefacts_list: list[SiteFacts]) -> list[AuditReport]:
-    """Run pipeline on multiple pages — returns one AuditReport per SiteFacts."""
+    """Run pipeline on multiple pages - returns one AuditReport per SiteFacts."""
     if len(sitefacts_list) > 10:
         raise HTTPException(status_code=400, detail="Max 10 pages per batch")
     tasks = [_run_single(sf) for sf in sitefacts_list]
@@ -137,7 +137,7 @@ async def agent_stream(agent_id: str) -> StreamingResponse:
     """SSE stream of AgentStatusEvents for a single running agent."""
     queue = state.get_queue(agent_id)
     if queue is None:
-        raise HTTPException(status_code=404, detail="Unknown agent_id — audit not started or already expired")
+        raise HTTPException(status_code=404, detail="Unknown agent_id - audit not started or already expired")
 
     async def generate():
         while True:

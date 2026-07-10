@@ -1,14 +1,14 @@
 import type { SiteFacts } from "../lib/types";
 import { AI_BOTS } from "../lib/types";
 
-// One dense line of ground truth — the deterministic SiteFacts, compressed.
+// One dense line of ground truth - the deterministic SiteFacts, compressed.
 
 export default function FactsStrip({ facts }: { facts: SiteFacts }) {
   const blocked = AI_BOTS.filter((b) => facts.robots.allows[b] === false);
   const js = Math.round(facts.render.js_dependency_ratio * 100);
 
   const items: Array<[string, string, "good" | "bad" | "plain"]> = [
-    ["HTTP", String(facts.http.status || "—"), facts.http.status === 200 ? "good" : "bad"],
+    ["HTTP", String(facts.http.status || "-"), facts.http.status === 200 ? "good" : "bad"],
     ["AI bots", blocked.length ? `${blocked.length} blocked` : "all allowed", blocked.length ? "bad" : "good"],
     ["JS-gated", `${js}%`, js > 50 ? "bad" : "good"],
     ["Schema", facts.structured_data.schema_types.length ? facts.structured_data.schema_types.slice(0, 3).join(", ") : "none", facts.structured_data.schema_types.length ? "good" : "bad"],
