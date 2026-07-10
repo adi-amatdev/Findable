@@ -20,13 +20,18 @@ class BaseAgent:
       role: str               - ModelRouter role name
       agent_name: str         - value for AgentResult.agent
       build_messages(sitefacts) -> list[dict]
-      parse_result(data, latency_ms, model, tokens) -> AgentResult
+      parse_result(data, latency_ms, model, tokens, prompt_tokens, completion_tokens) -> AgentResult
     """
 
     role: str = ""
     agent_name: str = ""
 
-    async def run(self, sitefacts: SiteFacts, agent_id: str | None = None) -> AgentResult:
+    async def run(
+        self,
+        sitefacts: SiteFacts,
+        agent_id: str | None = None,
+        audit_id: str | None = None,
+    ) -> AgentResult:
         async def _emit(phase: str, detail: str | None = None, score: int | None = None) -> None:
             if agent_id:
                 await state.emit(agent_id, AgentStatusEvent(
@@ -48,6 +53,8 @@ class BaseAgent:
             try:
                 response = await router.call_with_fallback(
                     self.role,
+                    agent=self.agent_name,
+                    audit_id=audit_id,
                     messages=messages,
                     response_format={"type": "json_object"},
                     temperature=0.1,
@@ -63,7 +70,10 @@ class BaseAgent:
 
         latency_ms = (time.monotonic() - t0) * 1000
         model_used = response["choices"][0].get("model", "unknown")
-        tokens = response.get("usage", {}).get("total_tokens", 0)
+        usage = response.get("usage", {}) or {}
+        tokens = usage.get("total_tokens", 0)
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
 
         from app.models.client import _strip_markdown_fences
         raw = _strip_markdown_fences(response["choices"][0]["message"]["content"] or "{}")
@@ -75,14 +85,24 @@ class BaseAgent:
             log.warning("%s returned invalid JSON; using defaults.", self.agent_name)
             data = {}
 
-        result = self.parse_result(data, latency_ms, model_used, tokens)
+        result = self.parse_result(
+            data, latency_ms, model_used, tokens, prompt_tokens, completion_tokens
+        )
         await _emit("complete", score=result.score)
         return result
 
     def build_messages(self, sitefacts: SiteFacts) -> list[dict[str, Any]]:
         raise NotImplementedError
 
-    def parse_result(self, data: dict[str, Any], latency_ms: float, model_used: str, tokens: int) -> AgentResult:
+    def parse_result(
+        self,
+        data: dict[str, Any],
+        latency_ms: float,
+        model_used: str,
+        tokens: int,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+    ) -> AgentResult:
         raise NotImplementedError
 
     @staticmethod

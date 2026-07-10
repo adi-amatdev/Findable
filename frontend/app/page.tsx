@@ -59,7 +59,7 @@ const WIKI: Record<string, WikiEntry> = {
       {
         heading: "What is extracted",
         stats: [
-          ["JS dependency", "1 - raw / rendered text length ratio"],
+          ["JS dependency", "Share of page text that only appears after JavaScript runs"],
           ["Schema.org", "JSON-LD detection and type validation"],
           ["Meta", "Title, description, OG, Twitter cards"],
           ["Robots", "Per-bot allow/deny for 6 AI crawlers"],

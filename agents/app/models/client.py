@@ -16,6 +16,25 @@ def _strip_markdown_fences(text: str) -> str:
     return text.strip()
 
 
+def _merge_system_message(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fold a leading system message into the first user message.
+
+    Gemma's chat template (served by our vLLM backends) rejects a `system`
+    role outright ("System role not supported"), so every caller building
+    system+user messages would otherwise 400 against vLLM and silently
+    fall back to Fireworks/Ollama on every call.
+    """
+    if not messages or messages[0].get("role") != "system":
+        return messages
+
+    system_content = messages[0]["content"]
+    rest = messages[1:]
+    if rest and rest[0].get("role") == "user":
+        merged_first = {**rest[0], "content": f"{system_content}\n\n{rest[0]['content']}"}
+        return [merged_first, *rest[1:]]
+    return [{"role": "user", "content": system_content}, *rest]
+
+
 class AsyncLLMClient:
     """Thin async wrapper around any OpenAI-compatible /v1/chat/completions endpoint."""
 
@@ -39,6 +58,7 @@ class AsyncLLMClient:
         tool_choice: Optional[str | dict] = None,
         guided_json: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
+        messages = _merge_system_message(messages)
         payload: dict[str, Any] = {
             "model": model,
             "messages": messages,

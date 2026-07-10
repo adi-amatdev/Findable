@@ -35,7 +35,15 @@ class EntityTopicAgent(BaseAgent):
             {"role": "user", "content": prompt},
         ]
 
-    def parse_result(self, data: dict, latency_ms: float, model_used: str, tokens: int) -> AgentResult:
+    def parse_result(
+        self,
+        data: dict,
+        latency_ms: float,
+        model_used: str,
+        tokens: int,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+    ) -> AgentResult:
         return AgentResult(
             agent=self.agent_name,
             score=max(0, min(100, int(data.get("score", 50)))),
@@ -44,4 +52,6 @@ class EntityTopicAgent(BaseAgent):
             model_used=model_used,
             latency_ms=round(latency_ms, 1),
             tokens=tokens,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )

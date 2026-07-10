@@ -1,0 +1,16 @@
+Download cloudflare using this command
+
+curl -k -L \
+  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+  -o /workspace/bin/cloudflared
+
+chmod +x /workspace/bin/cloudflared
+
+Test if cloudflare has successfully downloaded
+/workspace/bin/cloudflared --version
+
+If cloudflare downloading has gotten stuck, stop it and use this command to restart it
+
+curl -k -L -C - \
+  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+  -o /workspace/bin/cloudflared

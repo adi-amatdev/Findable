@@ -32,6 +32,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.models.client import AsyncLLMClient
+from app.token_logger import log_token_usage
 
 log = logging.getLogger(__name__)
 
@@ -51,10 +52,10 @@ OLLAMA_HEAVY_MODEL = os.getenv("LOCAL_HEAVY_MODEL", "gemma4:e2b")
 FIREWORKS_BASE        = "https://api.fireworks.ai/inference"
 FIREWORKS_KEY         = os.getenv("FIREWORKS_KEY", "")
 FIREWORKS_HEAVY_MODEL = os.getenv(
-    "FIREWORKS_HEAVY_MODEL", "accounts/fireworks/models/gemma-4-27b-it"
+    "FIREWORKS_HEAVY_MODEL", "accounts/fireworks/models/gemma-4-26b-a4b-it"
 )
 FIREWORKS_LIGHT_MODEL = os.getenv(
-    "FIREWORKS_LIGHT_MODEL", "accounts/fireworks/models/gemma-4-e4b-it"
+    "FIREWORKS_LIGHT_MODEL", "accounts/fireworks/models/gemma-4-e4b"
 )
 
 _local_only = os.getenv("LOCAL_ONLY", "0") == "1"
@@ -172,7 +173,14 @@ class ModelRouter:
             for s in _build_chain(role)
         ]
 
-    async def call_with_fallback(self, role: str, **kwargs) -> dict:
+    async def call_with_fallback(
+        self,
+        role: str,
+        *,
+        agent: str | None = None,
+        audit_id: str | None = None,
+        **kwargs,
+    ) -> dict:
         chain = self.get_chain(role)
         if not chain:
             raise RuntimeError(
@@ -183,7 +191,20 @@ class ModelRouter:
         last_exc: Exception | None = None
         for client, model in chain:
             try:
-                return await client.chat_completion(model=model, **kwargs)
+                response = await client.chat_completion(model=model, **kwargs)
+                usage = response.get("usage", {}) or {}
+                log_token_usage(
+                    role=role,
+                    agent=agent or role,
+                    model=model,
+                    backend=client._base_url,
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
+                    latency_ms=response.get("_latency_ms", 0.0),
+                    audit_id=audit_id,
+                )
+                return response
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 log.warning(
                     "Role '%s' model '%s' at '%s' failed (%s) — trying next fallback",

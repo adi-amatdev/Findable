@@ -1,5 +1,5 @@
 # external
 
 ## Concepts
-- [firecrawl](firecrawl.md) - Crawl service that returns rendered HTML, clean markdown, metadata, links, and a screenshot in one call; used for all deep-audit page fetches.
-- [fireworks-api](fireworks-api.md) - Remote inference endpoint serving Gemma 4 31B for the two heaviest LLM roles — E-E-A-T judgment and executive summary writing.
+- [firecrawl](firecrawl.md) - Crawl service that returns rendered HTML, clean markdown, metadata, links, and a screenshot in one call.
+- [fireworks-api](fireworks-api.md) - Remote inference fallback using Gemma 4 26B A4B IT for heavy roles and Gemma 4 E4B for light roles.

@@ -46,13 +46,13 @@ def _systemic_findings(page_results: list[tuple[SiteFacts, list[AgentResult]]]) 
     ][:5]
 
 
-async def _write_summary(page_results: list[PageResult], site_score: int) -> str:
+def build_summary_prompt(page_results: list[PageResult], site_score: int) -> str:
     findings_text = "\n".join(
         f"- [{f.severity}/5 severity, effort={f.effort}] {f.title}: {f.detail[:100]}"
         for page in page_results
         for f in page.fixes[:5]
     )
-    prompt = (
+    return (
         f"You are writing an executive summary for an AI-search readiness audit.\n\n"
         f"Overall AI Readiness Score: {site_score}/100\n\n"
         f"Top findings across {len(page_results)} page(s):\n{findings_text}\n\n"
@@ -62,9 +62,14 @@ async def _write_summary(page_results: list[PageResult], site_score: int) -> str
         f"3. Gives a sense of the effort required to improve\n\n"
         f"Be direct and specific. No filler. No markdown."
     )
+
+
+async def _write_summary(page_results: list[PageResult], site_score: int) -> str:
+    prompt = build_summary_prompt(page_results, site_score)
     try:
         response = await router.call_with_fallback(
             "report_writer",
+            agent="report_writer",
             messages=[
                 {"role": "system", "content": "You write concise, grounded audit summaries."},
                 {"role": "user", "content": prompt},
