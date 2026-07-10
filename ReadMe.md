@@ -19,7 +19,7 @@ URL → Firecrawl (rendered) + httpx (raw) → SiteFacts
   ├── Structured Data  (15%) — schema.org, llms.txt, meta extraction
   └── Entity & Topic   (20%) — knowledge graph, disambiguation, authority
          ↓
-  Weighted score (0–100) + hard gates + before/after visibility per AI bot
+  Weighted score (0–100) + score caps on critical failures + estimated before/after visibility per AI bot
          ↓
   AuditReport → live SSE dashboard → PDF / Markdown export
 ```
@@ -67,8 +67,8 @@ Edit `.env`:
 |---|---|---|
 | `FIRECRAWL_API_KEY` | [firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys) | Page crawling (required for real audits) |
 | `FIREWORKS_KEY` | [fireworks.ai](https://fireworks.ai) | Gemma cloud fallback (optional) |
-| `VLLM_URL` | Output of `server_files/serve.sh` | AMD GPU heavy model (optional) |
-| `VLLM_LIGHT_URL` | Output of `server_files/serve.sh` | AMD GPU light model (optional) |
+| `VLLM_URL` | Publicly accessible URL of your running vLLM heavy instance | AMD GPU heavy model (optional) |
+| `VLLM_LIGHT_URL` | Publicly accessible URL of your running vLLM light instance | AMD GPU light model (optional) |
 | `MOCK_STREAM` | Set `true` | Zero-cost demo — no API keys needed |
 
 ### 2. Run
@@ -76,6 +76,8 @@ Edit `.env`:
 ```bash
 docker compose up --build
 ```
+
+This starts frontend, backend, agents-api, and Redis — everything is included.
 
 | Service | URL |
 |---|---|
@@ -93,15 +95,19 @@ Streams a full mock audit with realistic SSE events — no Firecrawl, no LLM cal
 
 ---
 
-## AMD GPU server (for local Gemma inference)
+## Running Gemma on AMD (optional)
+
+If you have access to an AMD ROCm GPU server, spin up two vLLM instances on it:
 
 ```bash
-# On the AMD ROCm server:
-python server_files/download_models.py   # downloads gemma-2-2b-it + gemma-2-9b-it
-bash server_files/serve.sh               # starts both vLLM servers + cloudflared tunnels
+# Light model (port 8000)
+vllm serve google/gemma-2-2b-it --served-model-name light --port 8000
+
+# Heavy model (port 8001)
+vllm serve google/gemma-2-9b-it --served-model-name heavy --port 8001
 ```
 
-`serve.sh` prints two tunnel URLs. Paste them into `.env` as `VLLM_URL` and `VLLM_LIGHT_URL`, then restart the agents container.
+Expose both ports publicly (e.g. via cloudflared or ngrok), then set the resulting URLs in `.env` as `VLLM_LIGHT_URL` and `VLLM_URL`. Restart the agents container.
 
 ---
 
@@ -110,10 +116,10 @@ bash server_files/serve.sh               # starts both vLLM servers + cloudflare
 | Category | Technologies |
 |---|---|
 | AI models | Gemma 2 2B + 9B (AMD/vLLM), Gemma 4 via Fireworks AI |
-| Inference | vLLM on AMD ROCm 7.2.1, Ollama (local fallback) |
+| Inference | vLLM on AMD ROCm 7.2.1 · Fireworks AI (Gemma 4 cloud) · Ollama (local fallback) |
 | Backend | Python · FastAPI · httpx · Firecrawl |
 | Agents | 4 async agents · asyncio fan-out · SSE streaming |
-| Scoring | Deterministic rubric · hard gates · visibility estimator |
+| Scoring | Weighted rubric · score caps on critical failures · per-bot visibility estimate derived from SiteFacts signals |
 | Frontend | Next.js · React · anime.js · SSE EventSource |
 | Infrastructure | Docker Compose · Redis · cloudflared tunnels |
 | Dev tooling | uv · Ruff |
