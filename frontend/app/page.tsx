@@ -348,7 +348,7 @@ export default function Home() {
       <a className="brand" href="/" aria-label="Findable home">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="brand-mark" src="/mark.svg" alt="Findable logo" width={32} height={32} />
-        <span className="brand-name">Findable</span>
+        {/* <span className="brand-name">Findable</span> */}
       </a>
 
       <section className={`hero2 ${compact ? "compact" : ""}`}>
@@ -486,10 +486,11 @@ export default function Home() {
       )}
 
       <footer className="footer">
-        backend <span className="mono">{API_BASE}</span> ·{" "}
-        <a href={`${API_BASE}/docs`} target="_blank" rel="noreferrer">
-          api docs
-        </a>
+        <span className="footer-team">Team Dhridhata</span>
+        <span className="footer-sep">·</span>
+        <span className="footer-author">Aaditya Acharya</span>
+        <span className="footer-sep">·</span>
+        <span className="footer-author">Rohit Neeraje</span>
       </footer>
 
       {wiki && <WikiModal entry={WIKI[wiki]} onClose={() => setWiki(null)} />}

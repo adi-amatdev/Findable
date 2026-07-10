@@ -712,10 +712,22 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
 /* === FOOTER === */
 .footer {
   text-align: center;
-  color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   margin-top: 44px;
-  opacity: 0.7;
+  padding: 12px 0;
+  letter-spacing: 0.02em;
+}
+.footer-team {
+  color: var(--gold-2);
+  font-weight: 600;
+}
+.footer-sep {
+  color: var(--muted);
+  margin: 0 8px;
+}
+.footer-author {
+  color: var(--fg);
+  opacity: 0.85;
 }
 
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }

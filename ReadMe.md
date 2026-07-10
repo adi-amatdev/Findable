@@ -2,61 +2,132 @@
 
 > Can AI actually read, trust, and cite your website?
 
-Findable audits a URL the way an AI crawler sees it — not classic SEO. It checks what content is JS-gated, which AI bots are blocked by robots.txt, how strong the schema markup is, and what the page is actually about.
+Findable audits a URL the way AI crawlers see it — not classic SEO. It tells you what content is JS-gated, which AI bots are blocked, how strong your schema markup is, and whether your page is citation-worthy for ChatGPT, Claude, Perplexity, and Gemini.
 
-## What it does
+**Built by Team Dhridhata** — Aaditya Acharya · Rohit Neeraje
 
-Given a URL, it runs a deterministic pipeline and returns a `SiteFacts` snapshot — same input, same output, no LLM guesswork:
+---
+
+## How it works
 
 ```
-POST /api/sitefacts {url}
-   Firecrawl  → rendered HTML, markdown, links
-   httpx      → raw HTML, robots.txt, sitemap.xml, llms.txt
-   ↓
- SiteFacts  →  per-bot robots access · JS-dependency ratio · schema.org types
-               title/meta/canonical · link graph · authorship · entities
+URL → Firecrawl (rendered) + httpx (raw) → SiteFacts
+         ↓
+  Four AI agents run in parallel (asyncio.gather)
+  ├── Crawlability     (30%) — robots.txt, JS-gating, latency, sitemaps
+  ├── Content Signal   (35%) — E-E-A-T, commodity check, citation-worthiness
+  ├── Structured Data  (15%) — schema.org, llms.txt, meta extraction
+  └── Entity & Topic   (20%) — knowledge graph, disambiguation, authority
+         ↓
+  Weighted score (0–100) + hard gates + before/after visibility per AI bot
+         ↓
+  AuditReport → live SSE dashboard → PDF / Markdown export
 ```
 
-Results are cached in Redis by URL hash — repeat calls never re-crawl.
+Results stream live to the frontend via SSE as each agent completes.
 
-Four agents then judge the `SiteFacts` and produce an `AuditReport` with an AI Readiness Score (0–100), before/after visibility estimates per AI model, and ranked findings.
+---
 
-## Quickstart
+## AMD + Gemma — the inference stack
+
+Findable's reasoning engine runs entirely on **AMD ROCm + vLLM + Gemma**:
+
+| Layer | Detail |
+|---|---|
+| Hardware | AMD Radeon PRO W7900 · 48 GB VRAM · ROCm 7.2.1 |
+| Light model | `google/gemma-2-2b-it` — served via vLLM on port 8000 |
+| Heavy model | `google/gemma-2-9b-it` — served via vLLM on port 8001 |
+| Cloud fallback | Fireworks AI — `gemma-4-27b-it` (heavy) · `gemma-4-e4b-it` (light) |
+| Local fallback | Ollama — `gemma4:e2b` |
+
+All four agents fire **concurrent async requests** that vLLM batches via continuous batching on the AMD GPU — real parallelism, not N model copies. Fireworks (also Gemma) handles the two heaviest roles as a quality fallback. Gemma models serve every LLM role in the system.
+
+---
+
+## Setup
+
+### Prerequisites
+
+- Docker + Docker Compose
+- A Firecrawl API key (free tier works)
+- Optional: Fireworks API key for cloud LLM fallback
+- Optional: AMD GPU server running `server_files/serve.sh` for local inference
+
+### 1. Clone and configure
 
 ```bash
-uv sync --group dev
-cp .env.example .env      # set your API keys (see below)
-uv run uvicorn app.main:app --reload --port 8000
+git clone https://github.com/<your-org>/Findable.git
+cd Findable
+cp .env.example .env
 ```
 
-Open [http://localhost:8000/docs](http://localhost:8000/docs) or the frontend at [http://localhost:3000](http://localhost:3000).
+Edit `.env`:
 
-## API keys
-
-| Key | Where to get it | Required for |
+| Variable | Where to get it | Purpose |
 |---|---|---|
-| `FIRECRAWL_API_KEY` | [firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys) | `POST /api/sitefacts`, full audit |
-| `FIREWORKS_KEY` | [fireworks.ai](https://fireworks.ai) | Cloud LLM fallback (optional) |
-| `VLLM_URL` | Run `agents/jupyter_vllm_setup.py` on a GPU server | Heavy model inference (optional) |
+| `FIRECRAWL_API_KEY` | [firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys) | Page crawling (required for real audits) |
+| `FIREWORKS_KEY` | [fireworks.ai](https://fireworks.ai) | Gemma cloud fallback (optional) |
+| `VLLM_URL` | Output of `server_files/serve.sh` | AMD GPU heavy model (optional) |
+| `VLLM_LIGHT_URL` | Output of `server_files/serve.sh` | AMD GPU light model (optional) |
+| `MOCK_STREAM` | Set `true` | Zero-cost demo — no API keys needed |
 
-Set them in `.env` — see `.env.example` for all options.
-
-To run without any LLM (frontend demo only): set `MOCK_STREAM=true` in `.env`.
-
-## Docker (full stack)
+### 2. Run
 
 ```bash
 docker compose up --build
 ```
 
-Starts: backend (8000), agents-api (8080), Redis, frontend (3000). Requires Ollama running locally for LLM calls.
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000/docs |
+| Agents API | http://localhost:8080/docs |
+
+### 3. Zero-cost demo (no API keys)
+
+```bash
+MOCK_STREAM=true docker compose up --build
+```
+
+Streams a full mock audit with realistic SSE events — no Firecrawl, no LLM calls.
+
+---
+
+## AMD GPU server (for local Gemma inference)
+
+```bash
+# On the AMD ROCm server:
+python server_files/download_models.py   # downloads gemma-2-2b-it + gemma-2-9b-it
+bash server_files/serve.sh               # starts both vLLM servers + cloudflared tunnels
+```
+
+`serve.sh` prints two tunnel URLs. Paste them into `.env` as `VLLM_URL` and `VLLM_LIGHT_URL`, then restart the agents container.
+
+---
+
+## Tech stack
+
+| Category | Technologies |
+|---|---|
+| AI models | Gemma 2 2B + 9B (AMD/vLLM), Gemma 4 via Fireworks AI |
+| Inference | vLLM on AMD ROCm 7.2.1, Ollama (local fallback) |
+| Backend | Python · FastAPI · httpx · Firecrawl |
+| Agents | 4 async agents · asyncio fan-out · SSE streaming |
+| Scoring | Deterministic rubric · hard gates · visibility estimator |
+| Frontend | Next.js · React · anime.js · SSE EventSource |
+| Infrastructure | Docker Compose · Redis · cloudflared tunnels |
+| Dev tooling | uv · Ruff |
+
+---
+
+## Why it matters
+
+AI search (ChatGPT, Perplexity, Claude, Gemini) is replacing the blue-link web. Websites that aren't readable by AI crawlers simply won't be cited — no matter how good their classic SEO is. Findable gives any site owner a concrete, actionable score and fix list before they get left out of AI answers.
+
+---
 
 ## Docs
 
-- [USAGE.md](USAGE.md) — run, test, curl
+- [USAGE.md](USAGE.md) — full API reference, curl examples, frontend dev setup
 - [VALIDATION.md](VALIDATION.md) — architecture conformance map
-- [okf/](okf/index.md) — full system architecture
-
-## Stack
-
-FastAPI · Next.js · Firecrawl · Ollama/vLLM · Fireworks · Redis · Docker · uv
+- [okf/](okf/index.md) — full system architecture knowledge base
