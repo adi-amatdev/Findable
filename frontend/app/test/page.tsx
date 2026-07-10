@@ -12,7 +12,6 @@ const vertexShader = `
   varying float vLuminosity;
   varying vec3 vWorldPos;
 
-  // 3D noise for organic chaos
   float hash3(vec3 p) {
     return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
   }
@@ -49,64 +48,45 @@ const vertexShader = `
     float seed = uSeed;
     float t = uTime;
 
-    // === WAVE LAYERS: many diagonal & intersecting ===
-    float wave1 = sin(pos.x * 1.1 + pos.y * 0.4 + t * 0.25 + seed) * 0.45;
-    float wave2 = sin(pos.x * 0.6 - pos.y * 0.8 + t * 0.12 + seed * 2.1) * 0.32;
-    float wave3 = sin(pos.x * 2.5 + pos.y * 1.2 + t * 0.5 + seed * 0.7) * 0.18;
-    float wave4 = sin(pos.x * 3.8 - pos.y * 0.5 + t * 0.7 + seed * 3.3) * 0.10;
-    // Extra wave layers: steep diagonal, shallow sweep, tight ripple
-    float wave5 = sin(pos.x * 1.8 + pos.y * 2.2 + t * 0.35 + seed * 4.1) * 0.22;
-    float wave6 = sin(pos.x * 0.4 - pos.y * 0.3 + t * 0.08 + seed * 1.3) * 0.40;
-    float wave7 = sin(pos.x * 5.2 + pos.y * 0.9 + t * 0.9 + seed * 2.7) * 0.08;
-    float wave8 = sin(pos.x * 0.9 - pos.y * 1.6 + t * 0.18 + seed * 5.5) * 0.28;
+    float flowSpeed = 0.8 + pulse * 1.2;
+    float flow = t * flowSpeed;
 
-    // === STREAKS: thin bright bands via sharp noise ===
-    float streakNoise1 = sin(pos.x * 7.0 + pos.y * 3.0 + t * 0.4 + seed * 6.0);
-    float streak1 = pow(max(streakNoise1, 0.0), 8.0) * 0.5;
-    float streakNoise2 = sin(pos.x * 4.0 - pos.y * 5.0 + t * 0.25 + seed * 3.0);
-    float streak2 = pow(max(streakNoise2, 0.0), 10.0) * 0.4;
-    float streakNoise3 = sin(pos.x * 9.0 + pos.y * 1.5 + t * 0.6 + seed * 8.0);
-    float streak3 = pow(max(streakNoise3, 0.0), 12.0) * 0.3;
+    float meander1 = sin(pos.y * 0.6 + t * 0.12 + seed) * 1.8;
+    float meander2 = sin(pos.y * 0.25 + t * 0.06 + seed * 2.3) * 0.9;
+    float meanderX = meander1 + meander2;
 
-    // === VERTICAL FADE ===
-    float vertFade = smoothstep(-1.2, -0.2, uv.y) * smoothstep(1.2, 0.3, uv.y);
+    float band1 = sin((pos.x + meanderX * 0.4) * 0.8 + flow * 0.5 + seed) * 0.6;
+    float band2 = sin((pos.x + meanderX * 0.25) * 0.45 - flow * 0.35 + seed * 1.7) * 0.5;
+    float band3 = sin((pos.x + meanderX * 0.6) * 1.1 + flow * 0.7 + seed * 3.1) * 0.35;
 
-    // === IDLE ELEVATION: all waves combined ===
-    float elevation = (wave1 + wave2 + wave3 + wave4 + wave5 + wave6 + wave7 + wave8) * vertFade;
-    elevation += (streak1 + streak2 + streak3) * vertFade;
-    elevation *= (1.0 + pulse * 1.5);
+    float curtain = sin(pos.x * 0.15 + meanderX * 0.1 + t * 0.04 + seed * 0.8) * 0.7;
 
-    // === 3D NOISE CHAOS: abstract organic displacement ===
-    vec3 noiseCoord = vec3(pos.xy * 0.4 + seed * 10.0, t * 0.08);
+    float vertFade = smoothstep(-1.8, 0.2, uv.y) * smoothstep(1.8, 0.2, uv.y);
+
+    float elevation = (band1 + band2 + band3 + curtain) * vertFade;
+    elevation *= (1.0 + pulse * 0.8);
+
+    vec3 noiseCoord = vec3(pos.xy * 0.15 + seed * 10.0, flow * 0.08);
     float n1 = fbm(noiseCoord) * 2.0 - 1.0;
     float n2 = fbm(noiseCoord + vec3(5.2, 1.3, 2.8)) * 2.0 - 1.0;
     float n3 = fbm(noiseCoord + vec3(9.7, 4.1, 6.3)) * 2.0 - 1.0;
 
-    // Chaos scales with pulse but also exists in idle
-    float chaosMix = 0.12 + pulse * 0.88;
+    float chaosMix = 0.1 + pulse * 0.9;
 
-    // Displace in all 3 axes
-    pos.x += n1 * 0.18 * chaosMix * vertFade;
-    pos.y += n2 * 0.10 * chaosMix * vertFade;
-    pos.z += n3 * 0.30 * chaosMix * vertFade;
+    pos.x += n1 * 0.2 * chaosMix * vertFade;
+    pos.y += n2 * 0.06 * chaosMix * vertFade;
+    pos.z += n3 * 0.35 * chaosMix * vertFade;
 
-    // Diagonal ripple chaos
-    float diagChaos = sin(pos.x * 3.0 + pos.y * 2.5 + t * 0.8 + seed * 5.0) * pulse * 0.2;
-    pos.z += diagChaos * vertFade;
+    float pulseSwing = sin(pos.y * 0.8 + t * 0.3 + seed * 4.0) * pulse * 0.25;
+    pos.x += pulseSwing * vertFade;
 
-    // Twist
-    float twist = sin(pos.y * 1.5 + t * 0.3) * pulse * 0.12 * vertFade;
+    float twist = sin(pos.y * 0.7 + t * 0.15) * pulse * 0.12 * vertFade;
     pos.x += twist;
 
-    // === LUMINOSITY: noise-based brightness zones ===
-    float lumNoise = fbm(vec3(pos.xy * 0.3, t * 0.06 + seed));
-    vLuminosity = lumNoise * (0.7 + pulse * 1.3);
+    float lumNoise = fbm(vec3(pos.xy * 0.1, flow * 0.06 + seed));
+    vLuminosity = lumNoise * (0.6 + pulse * 1.4);
 
-    // Streak luminosity: thin bright lines that drift
-    float streakLum = streak1 * 0.6 + streak2 * 0.4 + streak3 * 0.3;
-    vLuminosity += streakLum * (0.5 + pulse * 1.5);
-
-    elevation += n3 * 0.15 * chaosMix * vertFade;
+    elevation += n3 * 0.18 * chaosMix * vertFade;
     vElevation = elevation;
     vWorldPos = pos;
 
@@ -143,7 +123,7 @@ const fragmentShader = `
     float a = 0.5;
     for (int i = 0; i < 3; i++) {
       v += a * noise(p);
-      p *= 2.1;
+      p *= 1.8;
       a *= 0.48;
     }
     return v;
@@ -154,58 +134,50 @@ const fragmentShader = `
     float seed = uSeed;
     float t = uTime;
 
-    // === BASE COLOR: lerp between base and peak ===
-    vec3 color = mix(uBaseColor, uPeakColor, pulse * 0.7);
+    float flowSpeed = 0.8 + pulse * 1.2;
+    float flow = t * flowSpeed;
 
-    // === LUMINOSITY ZONES: drifting hot/cold spots ===
-    vec2 lumCoord = vWorldPos.xy * 0.25 + seed * 7.0;
-    float hotSpot1 = fbm2(lumCoord + vec2(t * 0.04, t * 0.03));
-    float hotSpot2 = fbm2(lumCoord * 1.7 + vec2(-t * 0.03, t * 0.05) + 3.14);
-    float hotSpot3 = noise(lumCoord * 3.0 + vec2(t * 0.08, -t * 0.02));
+    float meander1 = sin(vWorldPos.y * 0.6 + t * 0.12 + seed) * 1.8;
+    float meander2 = sin(vWorldPos.y * 0.25 + t * 0.06 + seed * 2.3) * 0.9;
+    float meanderX = meander1 + meander2;
 
-    // Combine luminosity — higher base for idle visibility
+    vec3 color = mix(uBaseColor, uPeakColor, pulse * 0.5);
+
+    vec2 lumCoord = vWorldPos.xy * 0.12 + seed * 7.0;
+    float hotSpot1 = fbm2(lumCoord + vec2(meanderX * 0.02, flow * 0.05));
+    float hotSpot2 = fbm2(lumCoord * 1.3 + vec2(-meanderX * 0.015, flow * 0.04) + 3.14);
+    float hotSpot3 = noise(lumCoord * 1.8 + vec2(t * 0.03, flow * 0.03));
+
     float luminosity = hotSpot1 * 0.5 + hotSpot2 * 0.3 + hotSpot3 * 0.2;
-    luminosity = luminosity * (0.7 + pulse * 1.3);
+    luminosity = luminosity * (0.5 + pulse * 1.0);
 
-    // === STREAKS: thin bright flowing lines ===
-    float streakA = sin(vWorldPos.x * 7.0 + vWorldPos.y * 3.0 + t * 0.4 + seed * 6.0);
-    float streakB = sin(vWorldPos.x * 4.0 - vWorldPos.y * 5.0 + t * 0.25 + seed * 3.0);
-    float streakC = sin(vWorldPos.x * 9.0 + vWorldPos.y * 1.5 + t * 0.6 + seed * 8.0);
+    float bandA = sin((vWorldPos.x + meanderX * 0.4) * 0.8 + flow * 0.5 + seed);
+    float bandB = sin((vWorldPos.x + meanderX * 0.25) * 0.45 - flow * 0.35 + seed * 1.7);
+    float bandC = sin((vWorldPos.x + meanderX * 0.6) * 1.1 + flow * 0.7 + seed * 3.1);
 
-    float streakVal = pow(max(streakA, 0.0), 10.0) * 0.5
-                    + pow(max(streakB, 0.0), 12.0) * 0.4
-                    + pow(max(streakC, 0.0), 14.0) * 0.3;
-    // Streaks always visible, brighter during pulse
-    float streakBrightness = streakVal * (0.6 + pulse * 2.0);
+    float bandVal = smoothstep(0.1, 0.9, bandA) * 0.4
+                  + smoothstep(0.2, 0.95, bandB) * 0.35
+                  + smoothstep(0.0, 0.85, bandC) * 0.25;
+    float bandBrightness = bandVal * (0.3 + pulse * 1.0);
 
-    // === ELEVATION GLOW ===
-    float elevGlow = smoothstep(-0.4, 1.0, vElevation);
+    float elevGlow = smoothstep(-0.5, 1.0, vElevation);
 
-    // === COLOR TEMPERATURE SHIFT ===
-    vec3 warmTint = vec3(1.08, 0.95, 0.78);
-    vec3 coolTint = vec3(0.82, 0.90, 1.08);
-    float tempMix = smoothstep(-0.3, 0.6, vElevation + luminosity * 0.3);
+    vec3 warmTint = vec3(1.06, 0.96, 0.82);
+    vec3 coolTint = vec3(0.86, 0.92, 1.06);
+    float tempMix = smoothstep(-0.2, 0.5, vElevation + luminosity * 0.25);
     vec3 tempTint = mix(coolTint, warmTint, tempMix);
 
-    // === APPLY LUMINOSITY, GLOW & STREAKS ===
     color *= tempTint;
-    color += elevGlow * luminosity * vec3(0.25, 0.2, 0.1) * (1.0 + pulse * 2.0);
-    // Streaks add warm bright lines
-    color += streakBrightness * vec3(0.35, 0.28, 0.12);
+    color += elevGlow * luminosity * vec3(0.2, 0.16, 0.08) * (1.0 + pulse * 1.5);
+    color += bandBrightness * vec3(0.3, 0.24, 0.1);
 
-    // === NOISE TEXTURE: silk grain ===
-    float grain = noise(vUv * 15.0 + t * 0.02 + seed) * 0.05;
-    color += grain;
-
-    // === VERTICAL GRADIENT ===
-    float vertGrad = mix(0.55, 1.0, vUv.y);
+    float vertGrad = mix(0.5, 1.0, vUv.y);
     color *= vertGrad;
 
-    // === ALPHA ===
-    float alpha = mix(0.04, 0.16, pulse);
-    alpha += elevGlow * 0.06;
-    alpha += streakBrightness * 0.04;
-    alpha *= (0.75 + luminosity * 0.5);
+    float alpha = mix(0.03, 0.12, pulse);
+    alpha += elevGlow * 0.04;
+    alpha += bandBrightness * 0.03;
+    alpha *= (0.6 + luminosity * 0.4);
     alpha *= vertGrad;
 
     gl_FragColor = vec4(color, alpha);
