@@ -115,7 +115,7 @@ a { color: var(--gold-2); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* === MAIN === */
-main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
+main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; position: relative; z-index: 1; }
 
 /* === HERO === */
 .hero2 {

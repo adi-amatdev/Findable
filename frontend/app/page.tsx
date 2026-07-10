@@ -7,7 +7,7 @@ import AgentColumn, { AgentState } from "../components/AgentColumn";
 import FactsStrip from "../components/FactsStrip";
 import ReportDashboard from "../components/ReportDashboard";
 import Spinner from "../components/Spinner";
-import LivingBackground from "../components/LivingBackground";
+import ShaderBackground, { type ShaderBackgroundHandle } from "../components/ShaderBackground";
 import HowItWorks from "../components/HowItWorks";
 import { AGENTS } from "../lib/agents";
 import { API_BASE, ApiError, getSiteFacts, postAuditStart, getAuditResult } from "../lib/api";
@@ -170,6 +170,8 @@ export default function Home() {
   const columnsRef = useRef<HTMLDivElement>(null);
   const decoRef = useRef<SVGSVGElement | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const bgRef = useRef<ShaderBackgroundHandle>(null);
+  const streamPulseRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const path = decoRef.current?.querySelector("path");
@@ -238,7 +240,10 @@ export default function Home() {
     }
   }, [agents, stage, agentsDone]);
 
-  useEffect(() => () => closers.current.forEach((c) => c()), []);
+  useEffect(() => () => {
+    closers.current.forEach((c) => c());
+    if (streamPulseRef.current) clearInterval(streamPulseRef.current);
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -251,6 +256,7 @@ export default function Home() {
     setAgents(initialAgents());
     lastPhases.current = {};
     setStage("crawling");
+    bgRef.current?.triggerPulse(0.4, 5000);
 
     const ac = new AbortController();
     abortRef.current = ac;
@@ -284,6 +290,11 @@ export default function Home() {
 
     if (ac.signal.aborted) return;
     setStage("judging");
+    bgRef.current?.triggerPulse(0.5, 6000);
+    // Gentle repeating pulse while agents stream
+    streamPulseRef.current = setInterval(() => {
+      bgRef.current?.triggerPulse(0.3, 4000);
+    }, 5500);
 
     closers.current.forEach((c) => c());
     closers.current = AGENTS.map((a) =>
@@ -326,6 +337,7 @@ export default function Home() {
     auditIdRef.current = null;
     closers.current.forEach((c) => c());
     closers.current = [];
+    if (streamPulseRef.current) { clearInterval(streamPulseRef.current); streamPulseRef.current = null; }
     setAgentsDone(false);
     setContinueReady(false);
     setStage("idle");
@@ -339,11 +351,13 @@ export default function Home() {
     const t2 = setTimeout(() => setProcessingStep(2), 400 + 1500);
     const t3 = setTimeout(() => setProcessingStep(3), 400 + 3000);
     const t4 = setTimeout(() => setProcessingStep(4), 400 + 4500);
-    const t5 = setTimeout(() => setStage("report"), 400 + 6500);
+    const t5 = setTimeout(() => { setStage("report"); bgRef.current?.triggerPulse(0.6, 7000); }, 400 + 6500);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
   }, [stage, report]);
 
   function onContinue() {
+    if (streamPulseRef.current) { clearInterval(streamPulseRef.current); streamPulseRef.current = null; }
+    bgRef.current?.triggerPulse(0.55, 5000);
     const cols = columnsRef.current?.querySelectorAll(".agent-col");
     if (cols && cols.length) {
       animate(cols, {
@@ -363,7 +377,7 @@ export default function Home() {
 
   return (
     <main className={`stage-${stage}`}>
-      <LivingBackground />
+      <ShaderBackground ref={bgRef} />
 
       <a className="brand" href="/" aria-label="Findable home">
         {/* eslint-disable-next-line @next/next/no-img-element */}
