@@ -941,6 +941,168 @@ main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
   .dyk-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* === HOW IT WORKS === */
+.hiw-section {
+  margin-top: 56px;
+  text-align: center;
+}
+
+.hiw-header {
+  margin-bottom: 32px;
+}
+
+.hiw-eyebrow {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-bottom: 10px;
+  opacity: 0.7;
+}
+
+.hiw-title {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text);
+}
+
+.hiw-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.hiw-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.hiw-card {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  position: relative;
+  cursor: default;
+  transition: border-color 0.3s ease;
+  margin-bottom: 16px;
+}
+
+.hiw-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, rgba(201, 168, 76, 0.06), transparent 60%);
+  pointer-events: none;
+}
+
+.hiw-card:hover {
+  border-color: var(--border-hover);
+}
+
+.hiw-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.hiw-icon-wrap {
+  opacity: 0.85;
+  transition: opacity 0.3s ease;
+}
+
+.hiw-card:hover .hiw-icon-wrap {
+  opacity: 1;
+}
+
+.hiw-visual-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.hiw-badges {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 4px;
+}
+
+.hiw-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(12, 8, 6, 0.7);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  backdrop-filter: blur(6px);
+}
+
+.hiw-step-label {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gold-2);
+  margin-bottom: 6px;
+}
+
+.hiw-step-title {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+.hiw-step-desc {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+  max-width: 28ch;
+}
+
+@media (max-width: 960px) {
+  .hiw-grid { grid-template-columns: repeat(2, 1fr); }
+  .hiw-title { font-size: 34px; }
+}
+
+@media (max-width: 560px) {
+  .hiw-grid { grid-template-columns: 1fr; max-width: 320px; }
+  .hiw-title { font-size: 28px; }
+  .hiw-card { aspect-ratio: 3 / 2; }
+}
+
 /* === REPORT DASHBOARD === */
 .report-dashboard {
   margin-top: 20px;

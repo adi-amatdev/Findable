@@ -8,6 +8,7 @@ import FactsStrip from "../components/FactsStrip";
 import ReportDashboard from "../components/ReportDashboard";
 import Spinner from "../components/Spinner";
 import LivingBackground from "../components/LivingBackground";
+import HowItWorks from "../components/HowItWorks";
 import { AGENTS } from "../lib/agents";
 import { API_BASE, ApiError, getSiteFacts, postAuditStart, getAuditResult } from "../lib/api";
 import { openAgentStream } from "../lib/stream";
@@ -431,6 +432,8 @@ export default function Home() {
             ))}
           </div>
         )}
+
+        {stage === "idle" && <HowItWorks />}
 
         {stage === "idle" && (
           <div className="dyk-section">
