@@ -111,6 +111,12 @@ Expose both ports publicly (e.g. via cloudflared or ngrok), then set the resulti
 
 ---
 
+## Live deployment
+
+The full stack (frontend, backend, agents-api, Redis) is hosted on an AWS EC2 `t3.small` instance at **[https://findable.duckdns.org](https://findable.duckdns.org)**. All LLM inference is offloaded to the AMD ROCm GPU server (vLLM) and Fireworks AI — the EC2 instance handles only routing, orchestration, and serving the frontend.
+
+---
+
 ## Tech stack
 
 | Category | Technologies |
