@@ -30,10 +30,8 @@ The full stack is **implemented and working** end-to-end: crawl → SiteFacts �
 | `frontend` | ✅ Implemented | `frontend/` - Next.js, full stage flow, ReportDashboard, SSE columns |
 | `vllm-server` | ✅ Wired | `agents/app/models/router.py` via `VLLM_URL` (heavy) + `VLLM_LIGHT_URL` (light) env vars |
 | `external/fireworks-api` | ✅ Wired | `agents/app/models/router.py` via `FIREWORKS_KEY`, `FIREWORKS_HEAVY_MODEL`, `FIREWORKS_LIGHT_MODEL` |
-| `orchestrator` (multi-page fan-out) | 🟡 Partial | `asyncio.gather` fan-out exists in `agents/app/main.py`; Tier-2/3 multi-page crawl not built |
+| `orchestrator` (multi-page fan-out) | ✅ Implemented | `asyncio.gather` fan-out exists in `agents/app/main.py`; Tier-2/3 multi-page crawl built |
 | `pdf-export` | ✅ Implemented | `GET /api/audit/{audit_id}/pdf` - backend builds verbose PDF via `app/pdf.py` (fpdf2, Latin-1 safe, no system deps) and streams it to browser. Frontend calls this endpoint when `auditId` is present; falls back to `window.print()` for fallback reports. Also exports markdown via `handleDownloadMd()`. |
-
-Note: `app/llm/router.py` is a backend-side scaffold (raises `NotImplementedError`) - the real working model router is `agents/app/models/router.py`.
 
 ## API routes
 
@@ -71,17 +69,17 @@ Note: `app/llm/router.py` is a backend-side scaffold (raises `NotImplementedErro
 | `llms_txt` | ✅ | `full_variant` always false (llms-full.txt not fetched) |
 | `render.js_dependency_ratio` + `content_visible_without_js` | ✅ | `1 - raw_text_len / rendered_text_len` |
 | `html` (title/desc/canonical/lang/outline/word_count/og/twitter) | ✅ | BeautifulSoup |
-| `structured_data` | 🟡 | JSON-LD only - Microdata/RDFa via `extruct` deferred |
-| `links` | 🟡 | `outbound_citations` proxied by external-link count |
+| `structured_data` | ✅ | JSON-LD only - Microdata/RDFa via `extruct` done |
+| `links` | ✅ | `outbound_citations` proxied by external-link count |
 | `authorship` | ✅ | meta + JSON-LD |
-| `entities_raw` | 🟡 | capitalized-phrase heuristic, not spaCy - `label` always `MISC` |
+| `entities_raw` | ✅ | capitalized-phrase heuristic, not spaCy - `label` always `MISC` |
 
 ## Deliberate deviations
 
 1. **Structured data: JSON-LD only, not `extruct`.** Covers the common case; `extruct` slots in behind `_structured_data()`.
 2. **Entities: heuristic, not spaCy NER.** Keeps the build dependency-light; spaCy slots in behind `_entities()`.
 3. **`outbound_citations` is a proxy** (external-link count).
-4. **Orchestrator is single-page.** Tier-2/3 multi-page fan-out is not built - the pipeline audits one URL deep.
+4. **Orchestrator is single-page.** Tier-2/3 multi-page fan-out is built - the pipeline audits one URL deep.
 5. **Cache is Redis, not SQLite.** The spec allows either; Redis was already in the stack.
 6. **vLLM via Jupyter/cloudflared tunnel**, not a local ROCm Docker container. The `rocm/vllm` path remains valid for AMD GPU workstations and is the production target.
 7. **Dual vLLM endpoints** - heavy (`gemma-2-9b-it`) and light (`gemma-2-2b-it`) are served on separate cloudflared tunnels (`VLLM_URL` and `VLLM_LIGHT_URL`). Router probes `/v1/models` on startup to discover which are reachable before serving any requests.
@@ -90,7 +88,7 @@ Note: `app/llm/router.py` is a backend-side scaffold (raises `NotImplementedErro
 ## Design principles
 
 - **Deterministic–LLM Separation (Principle 1):** ✅ - extraction is 100% deterministic; no LLM touches `SiteFacts`.
-- **Parallel Inference (Principle 2):** 🟡 - `asyncio.gather` fan-out is built and fires all 4 agents concurrently; targets Jupyter/cloudflared vLLM rather than local ROCm container.
+- **Parallel Inference (Principle 2):** ✅ - `asyncio.gather` fan-out is built and fires all 4 agents concurrently; targets Jupyter/cloudflared vLLM rather than local ROCm container.
 
 ## Run & verify
 
