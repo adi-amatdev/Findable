@@ -1,5 +1,8 @@
 # Update Log
 
+## 2026-07-11 (frontend visual port)
+* **Update**: Ported the verified frontend visual system from the UI experiment: procedural Three.js galaxy background, stage-aware processing pulses, revised homepage copy and deliverables, fixed brand mark, expanded audit context facts grid, visibility edge-state messaging, and compact expandable agent-result cards. Frontend dependencies now include `three` and `@types/three`; no backend contracts or environment examples changed.
+
 ## 2026-07-11 (Fireworks serverless fallback + guided JSON translation)
 * **Fix**: Fireworks Gemma-family pages checked for this project (`gemma-4-26b-a4b-it`, `gemma-4-e4b`, `gemma-3-27b-it`) mark serverless as "Not supported", so the no-deployment Fireworks fallback defaults were changed to serverless models: heavy `accounts/fireworks/models/gpt-oss-120b`, light `accounts/fireworks/models/gpt-oss-20b`. Gemma Fireworks paths remain documented as optional on-demand deployment overrides.
 * **Fix**: `AsyncLLMClient.chat_completion()` now treats `guided_json` by backend: keeps `guided_json` for vLLM, translates it to Fireworks `response_format: {"type":"json_schema", ...}`, and omits it for Ollama. Added tests for vLLM/Fireworks/Ollama payload construction.

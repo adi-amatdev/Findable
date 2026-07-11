@@ -7,7 +7,8 @@ import AgentColumn, { AgentState } from "../components/AgentColumn";
 import FactsStrip from "../components/FactsStrip";
 import ReportDashboard from "../components/ReportDashboard";
 import Spinner from "../components/Spinner";
-import LivingBackground from "../components/LivingBackground";
+import ShaderBackground from "../components/ShaderBackground";
+import HowItWorks from "../components/HowItWorks";
 import { AGENTS } from "../lib/agents";
 import { API_BASE, ApiError, getSiteFacts, postAuditStart, getAuditResult } from "../lib/api";
 import { openAgentStream } from "../lib/stream";
@@ -62,7 +63,7 @@ const WIKI: Record<string, WikiEntry> = {
           ["JS dependency", "Gap between raw HTML and JS-rendered text length"],
           ["Schema.org", "JSON-LD detection and type validation"],
           ["Meta", "Title, description, OG, Twitter cards"],
-          ["Robots", "Per-bot allow/deny for 6 AI crawlers"],
+          ["Robots", "Per-bot allow/deny for AI crawlers"],
           ["Entities", "Named entity heuristics from page text"],
           ["Links", "Internal, external, citation graph"],
         ],
@@ -237,7 +238,9 @@ export default function Home() {
     }
   }, [agents, stage, agentsDone]);
 
-  useEffect(() => () => closers.current.forEach((c) => c()), []);
+  useEffect(() => () => {
+    closers.current.forEach((c) => c());
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -359,10 +362,11 @@ export default function Home() {
   }
 
   const compact = stage !== "idle";
+  const backgroundMode = stage === "idle" || stage === "report" ? "calm" : "processing";
 
   return (
     <main className={`stage-${stage}`}>
-      <LivingBackground />
+      <ShaderBackground mode={backgroundMode} />
 
       <a className="brand" href="/" aria-label="Findable home">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -374,7 +378,7 @@ export default function Home() {
         <h1>Findable</h1>
         <p className="tagline">
           Search is becoming answers. Findable audits whether AI - ChatGPT, Claude,
-          Perplexity - can actually <em>read, trust and cite</em> your page.
+          Perplexity, Google AI Overviews - can actually <em>read, trust and cite</em> your page.
         </p>
 
         <svg
@@ -431,6 +435,8 @@ export default function Home() {
             ))}
           </div>
         )}
+
+        {stage === "idle" && <HowItWorks />}
 
         {stage === "idle" && (
           <div className="dyk-section">

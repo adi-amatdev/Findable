@@ -2,14 +2,14 @@
 type: Service
 title: Next.js Frontend
 status: implemented
-description: Single-page Renaissance-themed dashboard with anime.js animations, SSE streaming agent columns, cancel/abort support, and a report dashboard with animated score gauge, visibility estimate, findings, and markdown/PDF export.
-tags: [frontend, nextjs, react, sse, animejs, report-dashboard]
-timestamp: 2026-07-09T00:00:00Z
+description: Single-page gold-on-black AI-readiness dashboard with a Three.js galaxy background, SSE agent streaming, cancel/abort support, and an interactive report dashboard.
+tags: [frontend, nextjs, react, sse, animejs, threejs, report-dashboard]
+timestamp: 2026-07-11T00:00:00Z
 ---
 
 # Next.js Frontend
 
-Lives in `frontend/`. Single-page dashboard (plain CSS + anime.js for motion; no chart/CSS frameworks). Communicates with the [FastAPI layer](/components/api.md). Next.js App Router on Node 16 — see [Frontend Choice](/decisions/frontend-choice.md).
+Lives in `frontend/`. Single-page dashboard using plain CSS, anime.js, Motion, and Three.js; no chart or CSS framework. Communicates with the [FastAPI layer](/components/api.md). Next.js App Router on Node 16 — see [Frontend Choice](/decisions/frontend-choice.md).
 
 ## Stage flow
 
@@ -25,9 +25,9 @@ The frontend progresses through five stages, each with animated entrance/exit tr
 
 ## Detailed flow (as built)
 
-1. **Story hero** — centered URL `input` + "Audit" button + a four-beat narrative explaining the product. Hero compresses via anime.js transition once an audit starts. Each story step can be tapped to open a `WikiModal` with educational content about crawl, facts, judges, and scoring.
+1. **Story hero** — fixed top-left brand mark, centered URL `input`, Audit button, and a four-beat narrative explaining the workflow. The model list includes ChatGPT, Claude, Perplexity, and Google AI Overviews. Each story step opens its corresponding educational panel; the lower "What you get" section instead focuses on audit deliverables to avoid repeating the workflow.
 
-2. **Crawl + facts** — `POST /api/sitefacts` runs the [SiteFacts Pipeline](/components/pipeline.md). A [FactsStrip](/components/FactsStrip.md) compresses the result to one dense line (HTTP status, blocked AI bots, JS-gated %, schema types, word count, llms.txt status).
+2. **Crawl + facts** — `POST /api/sitefacts` runs the [SiteFacts Pipeline](/components/pipeline.md). A two-row facts grid keeps the audited URL in a left column and aligns status chips from HTTP onward. It surfaces HTTP status and latency, `robots.txt`, AI-bot access, JavaScript text gap, schema types, word count, sitemap state, and `llms.txt`; present/healthy states are green and missing/blocked states are red.
 
 3. **Four agent columns** — one per [agent](/agents/), each with a shimmering skeleton until the SSE stream produces events. Each column subscribes to `GET /agent/stream/{agent_id}` via `EventSource("agent_status")`. Events are parsed from the [AgentStatusEvent](/data/agent-status-event.md) wire format. Columns display phase names and detail text as they arrive. On `complete` or `error` the column marks itself `done`.
 
@@ -37,7 +37,11 @@ The frontend progresses through five stages, each with animated entrance/exit tr
 
 6. **Generating** — a 4-step progress indicator cycles every 1.1 s for ~5 s total (Crawl data → Content signal → Structuring report → Finalizing dashboard). When complete, an animated checkmark plays before transitioning to the report stage.
 
-7. **Report dashboard** — mounts [ReportDashboard](https://github.com/anomalyco/Findable/frontend/components/ReportDashboard.tsx) with animated entrance from the right. The component renders the full [AuditReport](/data/audit-report.md) — animated score gauge, category score bars, visibility estimate, findings list, site coverage cards, and per-agent results with knowledge graph.
+7. **Report dashboard** — mounts [ReportDashboard](https://github.com/anomalyco/Findable/frontend/components/ReportDashboard.tsx) with animated entrance from the right. The component renders the full [AuditReport](/data/audit-report.md) — score gauge, category bars, findings, visibility, coverage, and compact per-agent summary cards. Selecting an agent card reveals its subscores, findings, execution metadata, and knowledge graph. A flat visibility estimate is labeled either "Already AI visible" (full visibility) or "No projected gain", rather than presenting a misleading `1.0x` improvement.
+
+## Visual system
+
+`ShaderBackground` renders a fixed Three.js gold-and-black galaxy scene behind all stages. Its seeded star clusters and shader-driven dust drift gently during `idle` and `report`. During `crawling`, `judging`, and `generating`, randomized local pulses brighten nearby dust and stars to indicate active work. Particle density adapts for mobile, device pixel ratio is capped, and `prefers-reduced-motion` disables continuous motion and pulses.
 
 ## Cancellation
 
@@ -67,6 +71,7 @@ When the audit result API returns an error (or the report isn't ready after max 
 - Agent column footer **does not show a score percentage** — intermediate SSE scores are used internally for the fallback report but are not displayed to avoid misrepresentation before the full audit completes.
 - Category score bars use **score-based colours** (red <50, amber 50–79, green ≥80) rather than fixed per-agent colours.
 - Logo served from `public/mark.svg` (not `icon.svg` — Next.js App Router reserves that filename as the favicon metadata route).
+- The background is procedural Three.js rather than a raster cover asset; it has no backend or API dependency.
 
 ## Live demo notes
 

@@ -214,6 +214,12 @@ function VisibilityBlock({ visibility }: { visibility: AuditReport["visibility"]
   const avgMultiplier =
     multipliers.filter(isFinite).reduce((s, x) => s + x, 0) /
     (multipliers.filter(isFinite).length || 1);
+  const noProjectedGain = models.every((m) =>
+    Math.abs(visibility.after[m.key] - visibility.before[m.key]) < 0.005
+  );
+  const alreadyAiVisible = models.every((m) =>
+    visibility.before[m.key] >= 0.995 && visibility.after[m.key] >= 0.995
+  );
 
   return (
     <div className="visibility-block" ref={ref}>
@@ -226,6 +232,8 @@ function VisibilityBlock({ visibility }: { visibility: AuditReport["visibility"]
           const before = visibility.before[m.key] * 100;
           const after = visibility.after[m.key] * 100;
           const mult = multipliers[i];
+          const noGainForModel = Math.abs(after - before) < 0.5;
+          const visibleForModel = before >= 99.5 && after >= 99.5;
           return (
             <div className="vis-col" key={m.key}>
               <span className="vis-model">{m.label}</span>
@@ -252,15 +260,24 @@ function VisibilityBlock({ visibility }: { visibility: AuditReport["visibility"]
                 </div>
               </div>
               <span className="vis-mult">
-                {isFinite(mult) ? `${mult.toFixed(1)}x` : `+${Math.round(after)}pp`} improvement
+                {visibleForModel
+                  ? "Already AI visible"
+                  : noGainForModel
+                    ? "No projected gain"
+                    : `${isFinite(mult) ? `${mult.toFixed(1)}x` : `+${Math.round(after)}pp`} improvement`}
               </span>
             </div>
           );
         })}
       </div>
       <div className="vis-avg">
-        Average improvement across all AI platforms:&nbsp;
-        <strong>{avgMultiplier.toFixed(1)}x</strong>
+        {alreadyAiVisible ? (
+          <><strong>Already AI visible.</strong> This page is estimated at full visibility across the assessed platforms.</>
+        ) : noProjectedGain ? (
+          <>No further visibility gain is projected from the available fixes.</>
+        ) : (
+          <>Average improvement across all AI platforms:&nbsp;<strong>{avgMultiplier.toFixed(1)}x</strong></>
+        )}
       </div>
     </div>
   );
@@ -307,6 +324,7 @@ function CoverageCard({ label, value }: { label: string; value: number }) {
 export default function ReportDashboard({ report, auditId }: { report: AuditReport; auditId?: string }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [showAllFindings, setShowAllFindings] = useState(false);
+  const [expandedAgentResult, setExpandedAgentResult] = useState<string | null>(null);
 
   const score = report.ai_readiness_score ?? 0;
 
@@ -548,41 +566,65 @@ ${findingsHtml}
 
       {report.pages?.map((page, pi) => (
         <div key={pi} className="dashboard-section">
-          <h3 className="section-title">Agent Results - {page.role}</h3>
+          <h3 className="section-title">Agent Results: {page.role}</h3>
           <p className="section-sub">{page.url}</p>
+          <p className="section-sub agent-results-hint">Select an agent result to view its findings and technical detail.</p>
           <div className="agent-results">
             {page.agent_results.map((ar, ai) => {
               const info = AGENT_INFO[ar.agent] || { name: ar.agent, color: "var(--accent)" };
+              const resultKey = `${pi}-${ai}-${ar.agent}`;
+              const isExpanded = expandedAgentResult === resultKey;
+              const resultDetailsId = `agent-result-${resultKey}`;
+              const summary = ar.findings?.length
+                ? ar.findings.slice(0, 2).map((finding) => finding.title).join(" ")
+                : "No material issues were reported by this agent.";
               const kg = ar.artifacts?.knowledge_graph as
                 | { nodes: Array<{ id: string; label: string; type: string }>; edges: Array<{ source: string; target: string; relation: string }> }
                 | undefined;
               return (
-                <div key={ai} className="agent-result-card" style={{ borderColor: ar.score >= 80 ? "var(--good)" : ar.score >= 50 ? "var(--warn)" : "var(--bad)" }}>
-                  <div className="ar-head">
-                    <span className="ar-name">{info.name}</span>
-                    <span className="ar-score">{ar.score}/100</span>
-                  </div>
-                  {ar.sub_scores && Object.keys(ar.sub_scores).length > 0 && (
-                    <div className="ar-subscores">
-                      {Object.entries(ar.sub_scores).map(([k, v]) => (
-                        <span key={k} className="ar-subscore">{k}: <strong>{v}</strong></span>
-                      ))}
+                <div
+                  key={ai}
+                  className={`agent-result-card${isExpanded ? " expanded" : ""}`}
+                  style={{ borderColor: ar.score >= 80 ? "var(--good)" : ar.score >= 50 ? "var(--warn)" : "var(--bad)" }}
+                >
+                  <button
+                    type="button"
+                    className="agent-result-toggle"
+                    aria-expanded={isExpanded}
+                    aria-controls={resultDetailsId}
+                    onClick={() => setExpandedAgentResult(isExpanded ? null : resultKey)}
+                  >
+                    <div className="ar-head">
+                      <span className="ar-name">{info.name}</span>
+                      <span className="ar-score">{ar.score}/100</span>
+                    </div>
+                    <p className="ar-summary">{summary}</p>
+                    <span className="ar-detail-hint">{isExpanded ? "Hide details" : "View details"}</span>
+                  </button>
+                  {isExpanded && (
+                    <div className="ar-expanded" id={resultDetailsId}>
+                      {ar.sub_scores && Object.keys(ar.sub_scores).length > 0 && (
+                        <div className="ar-subscores">
+                          {Object.entries(ar.sub_scores).map(([k, v]) => (
+                            <span key={k} className="ar-subscore">{k}: <strong>{v}</strong></span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="ar-meta">
+                        {ar.model_used !== "unknown" && <span>Model: {ar.model_used}</span>}
+                        {ar.latency_ms > 0 && <span>Latency: {(ar.latency_ms / 1000).toFixed(1)}s</span>}
+                        {ar.tokens > 0 && <span>Tokens: {ar.tokens.toLocaleString()}</span>}
+                      </div>
+                      {ar.findings && ar.findings.length > 0 && (
+                        <div className="ar-findings">
+                          {ar.findings.map((f) => (
+                            <div key={f.id} className="ar-finding">{f.title}</div>
+                          ))}
+                        </div>
+                      )}
+                      {kg && <KnowledgeGraph artifacts={ar.artifacts} />}
                     </div>
                   )}
-                  <div className="ar-meta">
-                    {ar.model_used !== "unknown" && <span>Model: {ar.model_used}</span>}
-                    {ar.latency_ms > 0 && <span>Latency: {(ar.latency_ms / 1000).toFixed(1)}s</span>}
-                    {ar.tokens > 0 && <span>Tokens: {ar.tokens.toLocaleString()}</span>}
-                  </div>
-                  {ar.findings && ar.findings.length > 0 && (
-                    <div className="ar-findings">
-                      {ar.findings.slice(0, 2).map((f) => (
-                        <div key={f.id} className="ar-finding">{f.title}</div>
-                      ))}
-                      {ar.findings.length > 2 && <div className="ar-more">+{ar.findings.length - 2} more</div>}
-                    </div>
-                  )}
-                  {kg && <KnowledgeGraph artifacts={ar.artifacts} />}
                 </div>
               );
             })}
