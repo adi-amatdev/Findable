@@ -197,7 +197,7 @@ The full-load snapshot shows GPU utilization reaching 100% with roughly 43.7 GB 
 ### 1. Configure
 
 ```bash
-git clone https://github.com/<your-org>/Findable.git
+git clone https://github.com/adi-amatdev/Findable.git
 cd Findable
 cp .env.example .env
 ```
