@@ -549,10 +549,11 @@ export default function Home() {
 
       <footer className="footer">
         <span className="footer-team">Team Dhridhata</span>
-        <span className="footer-sep">·</span>
-        <span className="footer-author">Aaditya Acharya</span>
-        <span className="footer-sep">·</span>
-        <span className="footer-author">Rohith Neeraje</span>
+        <span className="footer-members">
+          <span className="footer-author">Aaditya Acharya</span>
+          <span className="footer-sep">·</span>
+          <span className="footer-author">Rohith Neeraje</span>
+        </span>
       </footer>
 
       {wiki && <WikiModal entry={WIKI[wiki]} onClose={() => setWiki(null)} />}
