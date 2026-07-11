@@ -4,7 +4,7 @@ title: Agent SSE Streaming
 status: implemented
 description: Server-Sent Events infrastructure that lets clients watch each agent's thinking in real time — from phase start to LLM call to completion — without polling a blocking endpoint.
 tags: [sse, streaming, agents, real-time, frontend]
-timestamp: 2026-07-08T00:00:00Z
+timestamp: 2026-07-11T00:00:00Z
 ---
 
 # Agent SSE Streaming
@@ -35,6 +35,22 @@ _results: dict[str, AuditReport | BaseException]
 | `get_queue(agent_id)` | Returns the queue or `None` if unregistered. |
 | `store_result(audit_id, result)` | Stores completed AuditReport or exception. |
 | `get_result(audit_id)` | Returns stored result or `None` if still running. |
+
+## Deployment constraint
+
+The registry is deliberately in-process, so `agents-api` must run with **one
+Uvicorn worker**. With multiple workers, `/audit/start` can register queues in
+one process while a later `/agent/stream/{agent_id}` request reaches another,
+which has no record of the ID and returns `404`. The production Docker image
+therefore starts a single worker.
+
+The queues are registered synchronously in `/audit/start` before its background
+task is created. This removes the second race where the browser could open an
+SSE connection before the task had registered its queue. A service restart still
+ends active in-memory audits; the frontend treats that disconnected stream as a
+terminal offline state and produces its bounded fallback report rather than
+retrying indefinitely. Durable restart recovery would require moving this
+registry to Redis or another shared state service.
 
 ## Event phases
 
@@ -87,6 +103,12 @@ async with client.stream("GET", f"{agents_url}/agent/stream/{agent_id}") as resp
 ```
 
 `timeout=None` ensures the connection stays alive for the duration of the agent run.
+
+Before returning the `StreamingResponse`, the backend proxy opens the upstream
+stream and checks its status. This prevents an upstream `404` from being exposed
+as a successful empty SSE response, which would otherwise make browsers
+reconnect forever. The frontend closes such a failed stream into its terminal
+offline state.
 
 ## Tests
 

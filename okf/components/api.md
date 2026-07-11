@@ -4,7 +4,7 @@ title: FastAPI Application Layer
 status: implemented
 description: HTTP entrypoint. Exposes the SiteFacts pipeline, the integrated audit bridge, and the SSE agent-streaming routes. PDF export remains planned.
 tags: [backend, api, sse, integration, streaming]
-timestamp: 2026-07-08T00:00:00Z
+timestamp: 2026-07-11T00:00:00Z
 ---
 
 # FastAPI Application Layer

@@ -1,5 +1,11 @@
 # Update Log
 
+## 2026-07-11 (production SSE lifecycle fix)
+* **Fix**: Registered all per-agent SSE queues synchronously in `POST /audit/start`, before scheduling the audit task. This eliminates the deployment race where the browser could request a stream before the background task created its queue.
+* **Fix**: Changed `agents-api` to one Uvicorn worker because stream queues and active audit results are process-local. Two workers could route audit creation and stream reads to different registries, causing repeated `404` stream failures.
+* **Fix**: The backend SSE proxy now preserves upstream stream failures rather than turning a `404` into a `200` empty SSE response; the frontend closes any failed EventSource as offline, allowing its bounded report polling/fallback flow to complete rather than reconnecting forever.
+* **Update**: Content Signal findings now reference Google's current [Creating helpful, reliable, people-first content](https://developers.google.com/search/docs/fundamentals/creating-helpful-content) guidance for E-E-A-T.
+
 ## 2026-07-11 (frontend visual port)
 * **Update**: Ported the verified frontend visual system from the UI experiment: procedural Three.js galaxy background, stage-aware processing pulses, revised homepage copy and deliverables, fixed brand mark, expanded audit context facts grid, visibility edge-state messaging, and compact expandable agent-result cards. Frontend dependencies now include `three` and `@types/three`; no backend contracts or environment examples changed.
 

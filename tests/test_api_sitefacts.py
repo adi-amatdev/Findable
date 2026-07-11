@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import pytest
+import httpx
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from app.api import routes
 from app.api.deps import get_pipeline
 from app.cache import get_cache
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.main import app
 from app.pipeline import SiteFactsPipeline
 
@@ -46,3 +49,27 @@ def test_sitefacts_endpoint(client):
 def test_sitefacts_rejects_bad_url(client):
     resp = client.post("/api/sitefacts", json={"url": "not-a-url"})
     assert resp.status_code == 422  # pydantic HttpUrl validation
+
+
+async def test_agent_stream_proxy_preserves_upstream_404(monkeypatch):
+    """A missing agent stream must not be disguised as a 200 SSE response."""
+    class FakeClient:
+        async def send(self, request, *, stream):
+            assert stream is True
+            return httpx.Response(404, request=request, json={"detail": "Unknown agent_id"})
+
+        def build_request(self, method, url):
+            return httpx.Request(method, url)
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(routes.httpx, "AsyncClient", lambda **_: FakeClient())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await routes.agent_stream_proxy(
+            "missing-agent", Settings(agents_url="http://agents-api:8080")
+        )
+
+    assert exc_info.value.status_code == 404
+    assert "Unknown agent_id" in exc_info.value.detail
