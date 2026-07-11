@@ -89,3 +89,16 @@ def test_store_overwrites_previous():
     state.store_result("audit-2", "first")
     state.store_result("audit-2", "second")
     assert state.get_result("audit-2") == "second"
+
+
+def test_prune_expired_state_removes_old_entries(monkeypatch):
+    state.register_agent("old-agent")
+    state.store_result("old-audit", {"score": 82})
+    monkeypatch.setattr(state.time, "monotonic", lambda: 10_000)
+    state._queue_created_at["old-agent"] = 0
+    state._result_created_at["old-audit"] = 0
+
+    state.prune_expired_state(ttl_seconds=60)
+
+    assert state.get_queue("old-agent") is None
+    assert not state.has_audit("old-audit")

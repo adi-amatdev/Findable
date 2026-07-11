@@ -12,6 +12,7 @@ from app.api.deps import get_pipeline
 from app.cache import get_cache
 from app.config import Settings, get_settings
 from app.main import app
+from app.models.contracts import SiteFacts
 from app.pipeline import SiteFactsPipeline
 
 from .conftest import FakeCrawler, make_raw_crawl
@@ -51,6 +52,15 @@ def test_sitefacts_rejects_bad_url(client):
     assert resp.status_code == 422  # pydantic HttpUrl validation
 
 
+def test_agent_payload_bounds_markdown(client):
+    raw = client.post("/api/sitefacts", json={"url": "https://example.com/trail-shoes"}).json()
+    raw["markdown"] = "x" * (routes.MAX_AGENT_MARKDOWN_CHARS + 1)
+
+    payload = routes._agent_sitefacts_payload(SiteFacts.model_validate(raw))
+
+    assert len(payload["markdown"]) == routes.MAX_AGENT_MARKDOWN_CHARS
+
+
 async def test_agent_stream_proxy_preserves_upstream_404(monkeypatch):
     """A missing agent stream must not be disguised as a 200 SSE response."""
     class FakeClient:
@@ -73,3 +83,34 @@ async def test_agent_stream_proxy_preserves_upstream_404(monkeypatch):
 
     assert exc_info.value.status_code == 404
     assert "Unknown agent_id" in exc_info.value.detail
+
+
+async def test_agent_stream_proxy_handles_midstream_transport_failure(monkeypatch):
+    """An agents-api restart must close SSE cleanly, not crash the API app."""
+    class BrokenResponse:
+        def raise_for_status(self):
+            pass
+
+        async def aiter_bytes(self):
+            raise httpx.RemoteProtocolError("upstream closed")
+            yield b""  # pragma: no cover - makes this an async generator
+
+        async def aclose(self):
+            pass
+
+    class FakeClient:
+        def build_request(self, method, url):
+            return httpx.Request(method, url)
+
+        async def send(self, request, *, stream):
+            return BrokenResponse()
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(routes.httpx, "AsyncClient", lambda **_: FakeClient())
+    stream = await routes.agent_stream_proxy(
+        "agent-id", Settings(agents_url="http://agents-api:8080")
+    )
+
+    assert [chunk async for chunk in stream.body_iterator] == []

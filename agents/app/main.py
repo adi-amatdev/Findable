@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Agents SEO - Inference Layer", version="0.1.0", lifespan=lifespan)
+_tracked_audit_semaphore = asyncio.Semaphore(1)
 
 
 async def _run_agents(sitefacts: SiteFacts, audit_id: str | None = None) -> list[AgentResult]:
@@ -71,23 +72,27 @@ async def _run_agents_tracked(
     names = ["crawlability", "content_signal", "structured_data", "entity_topic"]
 
     try:
-        results = await asyncio.gather(
-            run_crawlability_agent(sitefacts, agent_id=agent_ids.get("crawlability"), audit_id=audit_id),
-            ContentSignalAgent().run(sitefacts, agent_id=agent_ids.get("content_signal"), audit_id=audit_id),
-            StructuredDataAgent().run(sitefacts, agent_id=agent_ids.get("structured_data"), audit_id=audit_id),
-            EntityTopicAgent().run(sitefacts, agent_id=agent_ids.get("entity_topic"), audit_id=audit_id),
-            return_exceptions=True,
-        )
-        agent_results: list[AgentResult] = []
-        for name, r in zip(names, results):
-            if isinstance(r, Exception):
-                log.warning("Agent %s failed: %s", name, r)
-                agent_results.append(AgentResult(agent=name, score=50))
-            else:
-                agent_results.append(r)
+        # The inference and crawl sub-agent are resource-intensive. Serialising
+        # whole audits avoids duplicated browser submissions multiplying memory
+        # use, while the four agents inside the active audit still run together.
+        async with _tracked_audit_semaphore:
+            results = await asyncio.gather(
+                run_crawlability_agent(sitefacts, agent_id=agent_ids.get("crawlability"), audit_id=audit_id),
+                ContentSignalAgent().run(sitefacts, agent_id=agent_ids.get("content_signal"), audit_id=audit_id),
+                StructuredDataAgent().run(sitefacts, agent_id=agent_ids.get("structured_data"), audit_id=audit_id),
+                EntityTopicAgent().run(sitefacts, agent_id=agent_ids.get("entity_topic"), audit_id=audit_id),
+                return_exceptions=True,
+            )
+            agent_results: list[AgentResult] = []
+            for name, r in zip(names, results):
+                if isinstance(r, Exception):
+                    log.warning("Agent %s failed: %s", name, r)
+                    agent_results.append(AgentResult(agent=name, score=50))
+                else:
+                    agent_results.append(r)
 
-        report = await aggregate([(sitefacts, agent_results)])
-        state.store_result(audit_id, report)
+            report = await aggregate([(sitefacts, agent_results)])
+            state.store_result(audit_id, report)
     except Exception as exc:
         log.exception("Tracked audit %s failed", audit_id)
         state.store_result(audit_id, exc)
@@ -127,6 +132,8 @@ async def _run_single(sitefacts: SiteFacts) -> AuditReport:
 @app.post("/audit/start")
 async def audit_start(req: AuditStartRequest) -> JSONResponse:
     """Fire-and-forget: start agents in background, return agent_ids immediately."""
+    state.prune_expired_state()
+    state.register_audit(req.audit_id)
     # Register queues before responding.  The browser opens all four SSE streams
     # immediately after this endpoint returns; registering in the background task
     # left a race where those streams could receive a 404 before the task ran.
@@ -159,6 +166,8 @@ async def agent_stream(agent_id: str) -> StreamingResponse:
 @app.get("/audit/{audit_id}/result")
 async def audit_result(audit_id: str):
     """Poll for the completed AuditReport. Returns 202 while still running."""
+    if not state.has_audit(audit_id):
+        raise HTTPException(status_code=404, detail="Unknown or expired audit_id")
     result = state.get_result(audit_id)
     if result is None:
         return JSONResponse({"status": "running"}, status_code=202)

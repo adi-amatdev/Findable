@@ -29,6 +29,16 @@ from ..pipeline import SiteFactsPipeline
 from .deps import get_firecrawl, get_pipeline
 
 router = APIRouter()
+MAX_AGENT_MARKDOWN_CHARS = 12_000
+
+
+def _agent_sitefacts_payload(sitefacts: SiteFacts) -> dict:
+    """Send agents the bounded content slice their prompts are designed to use."""
+    payload = sitefacts.model_dump(by_alias=True)
+    markdown = payload.get("markdown")
+    if isinstance(markdown, str) and len(markdown) > MAX_AGENT_MARKDOWN_CHARS:
+        payload["markdown"] = markdown[:MAX_AGENT_MARKDOWN_CHARS]
+    return payload
 
 
 def _raise_firecrawl(err: FirecrawlError) -> None:
@@ -92,8 +102,7 @@ async def audit(
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 f"{settings.agents_url.rstrip('/')}/audit",
-                content=sf.model_dump_json(),
-                headers={"Content-Type": "application/json"},
+                json=_agent_sitefacts_payload(sf),
             )
             resp.raise_for_status()
             return resp.json()
@@ -140,7 +149,7 @@ async def audit_start(
         _raise_firecrawl(err)
 
     payload = {
-        "sitefacts": sf.model_dump(by_alias=True),
+        "sitefacts": _agent_sitefacts_payload(sf),
         "audit_id": audit_id,
         "agent_ids": agent_ids,
     }
@@ -212,6 +221,13 @@ async def agent_stream_proxy(
         try:
             async for chunk in response.aiter_bytes():
                 yield chunk
+        except httpx.HTTPError as exc:
+            # A running agents-api can disappear (for example, during a
+            # container restart). The browser will receive a closed SSE stream
+            # and enter its bounded fallback path; do not turn that normal
+            # transport failure into an unhandled ASGI exception.
+            import logging
+            logging.getLogger(__name__).warning("agents-api stream ended: %s", exc)
         finally:
             await response.aclose()
             await client.aclose()

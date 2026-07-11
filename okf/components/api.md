@@ -38,6 +38,11 @@ The FastAPI app is the single entrypoint for external callers. Wired in `app/api
 
 ## Streaming flow (`POST /api/audit/start`)
 
+Before forwarding SiteFacts to agents-api, the API limits the markdown field to
+12,000 characters. The agents already use smaller prompt slices, so this avoids
+copying arbitrarily large page content into the inference container without
+removing any facts used by their judgments.
+
 `AGENTS_URL` in the backend config points at the agents-api service. The async audit flow:
 
 1. `SiteFactsPipeline.run(url)` — served from Redis cache if already crawled.

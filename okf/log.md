@@ -1,5 +1,10 @@
 # Update Log
 
+## 2026-07-11 (audit resource-safety fix)
+* **Fix**: Prevented `agents-api` memory spikes that could terminate the container with exit code 137. The crawlability sub-agent no longer launches up to 30 concurrent Tranco loads for internal links on the same domain; it performs one cached, locked domain lookup, fetches at most 1 MB per page, and limits deep crawls to two concurrent pages.
+* **Fix**: Bounded in-process audit state: completed queues/reports expire after one hour, unknown audit IDs return `404` rather than appearing to run forever, and whole audits are serialised so duplicate submissions cannot multiply crawl and model memory pressure.
+* **Fix**: The API's SSE proxy now catches mid-stream `httpx` transport failures caused by an agents container restart, closes the stream cleanly, and lets the frontend follow its bounded offline/fallback path instead of producing an ASGI traceback.
+
 ## 2026-07-11 (production SSE lifecycle fix)
 * **Fix**: Registered all per-agent SSE queues synchronously in `POST /audit/start`, before scheduling the audit task. This eliminates the deployment race where the browser could request a stream before the background task created its queue.
 * **Fix**: Changed `agents-api` to one Uvicorn worker because stream queues and active audit results are process-local. Two workers could route audit creation and stream reads to different registries, causing repeated `404` stream failures.

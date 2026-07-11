@@ -167,9 +167,16 @@ async def test_agent_stream_complete_event_carries_score():
 
 # ── GET /audit/{audit_id}/result ──────────────────────────────────────────────
 
-async def test_audit_result_202_when_not_started():
+async def test_audit_result_404_when_not_started():
     async with _client() as client:
         resp = await client.get("/audit/never-started/result")
+    assert resp.status_code == 404
+
+
+async def test_audit_result_202_while_registered_audit_is_running():
+    state.register_audit("running-audit")
+    async with _client() as client:
+        resp = await client.get("/audit/running-audit/result")
     assert resp.status_code == 202
     assert resp.json()["status"] == "running"
 
