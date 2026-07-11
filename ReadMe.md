@@ -153,17 +153,6 @@ Every successful LLM call is logged to `agents/logs/token_usage.jsonl` with role
 
 Gemma chat templates reject `system` role messages on the vLLM path. Findable handles this centrally in `agents/app/models/client.py` by folding a leading system message into the first user message before sending the request. This keeps agent prompts unchanged while preventing vLLM calls from failing and falling through unnecessarily.
 
-### Fireworks serverless note
-
-Fireworks' Gemma-family model pages checked for this project currently mark serverless as **not supported**. The README therefore uses no-deployment serverless Fireworks defaults (`gpt-oss-120b` and `gpt-oss-20b`) for cloud fallback. If you later create Fireworks on-demand deployments, you can switch the env vars to:
-
-```env
-FIREWORKS_HEAVY_MODEL=accounts/fireworks/models/gemma-4-26b-a4b-it
-FIREWORKS_LIGHT_MODEL=accounts/fireworks/models/gemma-4-e4b
-```
-
-See [docs/fireworks_serverless_pricing.md](docs/fireworks_serverless_pricing.md) for model availability, pricing, and rough per-audit cost.
-
 ### Gemma licensing
 
 Findable uses Gemma models in two places:
@@ -367,7 +356,6 @@ Useful API routes:
 ## Docs
 
 - [USAGE.md](USAGE.md) - API reference and local usage
-- [VALIDATION.md](VALIDATION.md) - current architecture conformance map
 - [okf/](okf/index.md) - OKF system knowledge base
 - [vllm_hosting/](vllm_hosting/) - AMD/vLLM hosting and load-test scripts
 - [docs/fireworks_serverless_pricing.md](docs/fireworks_serverless_pricing.md) - Fireworks serverless model/pricing notes
