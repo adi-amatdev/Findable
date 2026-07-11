@@ -64,8 +64,11 @@ async def test_audit_start_registers_queues(canned_sf_dict):
     with patch("app.main._run_agents_tracked", new_callable=AsyncMock) as mock:
         async with _client() as client:
             body = await _post_start(client, canned_sf_dict)
-    # endpoint must have called _run_agents_tracked once
+    # Queues must exist before the background task starts so an immediately
+    # opened browser stream cannot race into a 404.
     mock.assert_called_once()
+    for agent_id in body["agent_ids"].values():
+        assert state.get_queue(agent_id) is not None
 
 
 async def test_audit_start_rejects_invalid_body():

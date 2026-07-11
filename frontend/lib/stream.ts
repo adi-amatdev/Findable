@@ -52,10 +52,15 @@ export function openAgentStream(
 
   es.onerror = () => {
     if (closed) return;
-    if (es.readyState === EventSource.CLOSED) {
-      h.onOffline("Agent stream is not live yet.");
-      close();
-    }
+    // EventSource normally changes to CONNECTING and retries forever after a
+    // failed HTTP/SSE connection. An audit cannot recover an unknown stream ID,
+    // so settle this panel and let the report polling/fallback path complete.
+    h.onOffline(
+      es.readyState === EventSource.CLOSED
+        ? "Agent stream closed unexpectedly."
+        : "Agent stream connection failed.",
+    );
+    close();
   };
 
   function close() {

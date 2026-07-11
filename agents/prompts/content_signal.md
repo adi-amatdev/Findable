@@ -76,7 +76,7 @@ Produce a JSON object:
       "detail": "...",
       "fix": "...",
       "evidence": "...",
-      "ref_url": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide"
+      "ref_url": "https://developers.google.com/search/docs/fundamentals/creating-helpful-content"
     }}
   ]
 }}

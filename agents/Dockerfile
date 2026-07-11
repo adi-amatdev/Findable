@@ -16,4 +16,7 @@ RUN python -c "from tranco import Tranco; Tranco(cache=True, cache_dir='.tranco_
 
 EXPOSE 8080
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
+# SSE queues and in-progress audit results are intentionally in-process.  Keep a
+# single worker so /audit/start, /agent/stream, and /audit/{id}/result always
+# reach the same registry.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

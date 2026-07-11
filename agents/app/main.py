@@ -69,8 +69,6 @@ async def _run_agents_tracked(
 ) -> None:
     """Run all 4 agents concurrently, emitting SSE events per agent."""
     names = ["crawlability", "content_signal", "structured_data", "entity_topic"]
-    for aid in agent_ids.values():
-        state.register_agent(aid)
 
     try:
         results = await asyncio.gather(
@@ -129,6 +127,12 @@ async def _run_single(sitefacts: SiteFacts) -> AuditReport:
 @app.post("/audit/start")
 async def audit_start(req: AuditStartRequest) -> JSONResponse:
     """Fire-and-forget: start agents in background, return agent_ids immediately."""
+    # Register queues before responding.  The browser opens all four SSE streams
+    # immediately after this endpoint returns; registering in the background task
+    # left a race where those streams could receive a 404 before the task ran.
+    for agent_id in req.agent_ids.values():
+        state.register_agent(agent_id)
+
     asyncio.create_task(
         _run_agents_tracked(req.audit_id, req.sitefacts, req.agent_ids)
     )

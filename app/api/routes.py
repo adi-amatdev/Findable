@@ -185,19 +185,42 @@ async def agent_stream_proxy(
         )
 
     # ── Real path ────────────────────────────────────────────────────────────
+    # Open and validate the upstream response before returning StreamingResponse.
+    # Previously an upstream 404 was wrapped in a successful 200 SSE response;
+    # EventSource then reconnected forever and the UI never reached a terminal
+    # state.  Keep this connection open for the generator after validation.
+    client = httpx.AsyncClient(timeout=None)
+    response: httpx.Response | None = None
+    try:
+        request = client.build_request(
+            "GET", f"{settings.agents_url.rstrip('/')}/agent/stream/{agent_id}"
+        )
+        response = await client.send(request, stream=True)
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        body = (await exc.response.aread()).decode("utf-8", errors="replace")[:200]
+        await client.aclose()
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail=f"agents-api stream unavailable: {body}",
+        )
+    except httpx.RequestError as exc:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=f"Could not reach agents-api: {exc}")
+
     async def generate():
         try:
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream(
-                    "GET",
-                    f"{settings.agents_url.rstrip('/')}/agent/stream/{agent_id}",
-                ) as resp:
-                    async for chunk in resp.aiter_bytes():
-                        yield chunk
-        except httpx.RequestError:
-            yield b"event: error\ndata: {\"detail\": \"lost connection to agents-api\"}\n\n"
+            async for chunk in response.aiter_bytes():
+                yield chunk
+        finally:
+            await response.aclose()
+            await client.aclose()
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/api/audit/{audit_id}", tags=["pipeline"])
