@@ -7,6 +7,7 @@ TOOL_SCHEMAS are kept for optional vLLM tool-calling mode.
 from __future__ import annotations
 
 import re
+import threading
 import urllib.robotparser
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -17,6 +18,12 @@ _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; SEOAuditBot/1.0)",
     "Accept": "text/html,application/xhtml+xml,*/*",
 }
+MAX_PAGE_BYTES = 1_000_000
+MAX_ROBOTS_BYTES = 256_000
+
+_tranco_lock = threading.Lock()
+_tranco_list: Any | None = None
+_tranco_ranks: dict[str, int | None] = {}
 
 # ---------------------------------------------------------------------------
 # Low-level helpers
@@ -69,6 +76,19 @@ def _text_from_html(html: str) -> str:
     return text.strip()
 
 
+async def _read_limited(response: httpx.Response, max_bytes: int) -> bytes:
+    """Read a response incrementally, retaining at most ``max_bytes``."""
+    content = bytearray()
+    async for chunk in response.aiter_bytes():
+        remaining = max_bytes - len(content)
+        if remaining <= 0:
+            break
+        content.extend(chunk[:remaining])
+        if len(content) >= max_bytes:
+            break
+    return bytes(content)
+
+
 # ---------------------------------------------------------------------------
 # Tool implementations (all async)
 # ---------------------------------------------------------------------------
@@ -82,14 +102,18 @@ async def crawl_page_impl(url: str) -> dict[str, Any]:
         async with httpx.AsyncClient(
             timeout=20.0, follow_redirects=True, headers=_HEADERS
         ) as client:
-            resp = await client.get(url)
-        html = resp.text
+            async with client.stream("GET", url) as resp:
+                body = await _read_limited(resp, MAX_PAGE_BYTES)
+                final_url = str(resp.url)
+                status = resp.status_code
+                encoding = resp.encoding or "utf-8"
+        html = body.decode(encoding, errors="replace")
         text = _text_from_html(html)
-        links = _extract_links(html, str(resp.url))
+        links = _extract_links(html, final_url)
         js_ratio = _js_ratio_from_html(html)
         return {
-            "url": str(resp.url),
-            "status": resp.status_code,
+            "url": final_url,
+            "status": status,
             "text_length": len(text),
             "js_ratio": js_ratio,
             "excerpt": text[:3000],
@@ -124,8 +148,9 @@ async def check_bot_access_impl(base_url: str, bot: str = "GPTBot") -> dict[str,
         rp = urllib.robotparser.RobotFileParser()
         rp.set_url(robots_url)
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(robots_url)
-            rp.parse(resp.text.splitlines())
+            async with client.stream("GET", robots_url) as resp:
+                body = await _read_limited(resp, MAX_ROBOTS_BYTES)
+                rp.parse(body.decode(resp.encoding or "utf-8", errors="replace").splitlines())
         allowed = rp.can_fetch(bot, base_url)
         return {"url": base_url, "bot": bot, "allowed": allowed, "robots_url": robots_url}
     except Exception as exc:
@@ -150,12 +175,20 @@ async def get_http_status_impl(url: str) -> dict[str, Any]:
 
 def get_tranco_rank_sync(domain: str) -> int | None:
     """Return Tranco rank for a domain (None if not in top 1M). Tranco returns -1 for unranked."""
+    global _tranco_list
     try:
-        from tranco import Tranco  # type: ignore
-        t = Tranco(cache=True, cache_dir=".tranco_cache")
-        lst = t.list()
-        rank = lst.rank(domain)
-        return rank if (rank and rank > 0) else None
+        # Tranco's list is large. Load it once and serialize initialisation so
+        # concurrent audit tasks cannot create many copies in memory.
+        with _tranco_lock:
+            if domain in _tranco_ranks:
+                return _tranco_ranks[domain]
+            if _tranco_list is None:
+                from tranco import Tranco  # type: ignore
+                _tranco_list = Tranco(cache=True, cache_dir=".tranco_cache").list()
+            rank = _tranco_list.rank(domain)
+            result = rank if (rank and rank > 0) else None
+            _tranco_ranks[domain] = result
+            return result
     except Exception:
         return None
 

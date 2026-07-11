@@ -4,7 +4,7 @@ title: Crawlability and Access Agent
 status: implemented
 description: Judges how much content is blocked or invisible to AI crawlers — robots.txt restrictions, JS-gated content, latency, sitemap gaps — via a 3-pass deterministic sub-agent plus one LLM judgment call.
 tags: [agent, crawlability, robots, js, sub-agent, tranco]
-timestamp: 2026-07-08T00:00:00Z
+timestamp: 2026-07-11T00:00:00Z
 ---
 
 # Crawlability and Access Agent
@@ -17,11 +17,16 @@ Unlike the other agents, Crawlability runs a **programmatic sub-agent** (`sub_ag
 
 | Pass | What it does |
 |---|---|
-| **Pass 1** — Seed + discovery | Fetches the seed URL, extracts internal links (skipping non-HTML assets: images, CSS, JS, PDFs), ranks each link's domain via Tranco library, selects top 4 pages by traffic rank. |
+| **Pass 1** — Seed + discovery | Fetches the seed URL, extracts internal links (skipping non-HTML assets: images, CSS, JS, PDFs), looks up the shared site domain's Tranco rank once, then selects the first 4 representative internal pages. |
 | **Pass 2** — Deep crawl | For each top-ranked page: fetches full HTML, runs concurrent robots.txt check against 4 AI bots (`GPTBot`, `ClaudeBot`, `PerplexityBot`, `OAI-SearchBot`). |
 | **Pass 3** — Synthesis | Deterministic merge of Pass 1 + 2 results into `CrawlReport` objects (no LLM). |
 
-Tranco unranked domains (`rank == -1`) are treated as `None` and sorted last, preventing unranked favicon/asset URLs from being promoted.
+Tranco unranked domains (`rank == -1`) are treated as `None`. Because all
+follow-up candidates are internal links on the same host, per-link ranking would
+produce the same rank while repeatedly loading the large Tranco list. The list
+is now loaded once under a lock and domain results are cached for the process.
+Follow-up fetches are capped at 1 MB per HTML page and two concurrent pages to
+keep the sub-agent safe on content-heavy sites.
 
 ## LLM judgment
 

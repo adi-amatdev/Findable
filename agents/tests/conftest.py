@@ -133,6 +133,10 @@ def clear_state():
     """Reset the in-process state between every test."""
     state._queues.clear()
     state._results.clear()
+    state._queue_created_at.clear()
+    state._result_created_at.clear()
     yield
     state._queues.clear()
     state._results.clear()
+    state._queue_created_at.clear()
+    state._result_created_at.clear()

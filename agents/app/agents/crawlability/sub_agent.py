@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 AI_BOTS = ["GPTBot", "ClaudeBot", "PerplexityBot", "OAI-SearchBot"]
 TOP_N_PAGES = 4          # pages to deep-crawl in pass 2
 MAX_LINK_CANDIDATES = 30  # links to rank before selecting top-N
+MAX_CONCURRENT_DEEP_CRAWLS = 2
 
 
 def _same_domain(url: str, base: str) -> bool:
@@ -70,30 +71,21 @@ async def _pass1(seed_url: str) -> tuple[CrawlReport, list[str]]:
     links_result = await fetch_links_impl(seed_url, seed_url)
     internal_links = _dedupe(links_result.get("internal", []))[:MAX_LINK_CANDIDATES]
 
-    # Rank by Tranco (run concurrently)
-    traffic_tasks = [estimate_page_traffic_impl(u) for u in internal_links]
-    traffic_results = await asyncio.gather(*traffic_tasks, return_exceptions=True)
-
-    ranked: list[tuple[int, str]] = []
-    for url, tresult in zip(internal_links, traffic_results):
-        if isinstance(tresult, Exception):
-            rank = 999_999
-        else:
-            rank = tresult.get("tranco_rank") or 999_999
-        ranked.append((rank, url))
-    ranked.sort(key=lambda x: x[0])
-
-    top_urls = [u for _, u in ranked[:TOP_N_PAGES]]
-    tier_str = ", ".join(
-        f"{u} (rank {r if r < 999999 else 'unranked'})"
-        for r, u in ranked[:TOP_N_PAGES]
-    ) or "none"
+    # All candidates are internal links, so they share one domain and therefore
+    # one Tranco rank. Looking up that same rank for up to 30 URLs concurrently
+    # needlessly loaded the large Tranco list in many executor threads and could
+    # exhaust a small deployment. Preserve deterministic discovery order and
+    # perform one domain-level lookup for the audit metadata instead.
+    traffic = await estimate_page_traffic_impl(seed_url)
+    rank = traffic.get("tranco_rank")
+    top_urls = internal_links[:TOP_N_PAGES]
+    tier_str = ", ".join(top_urls) or "none"
 
     summary = (
         f"Seed page fetched (HTTP {seed['status']}, "
         f"JS ratio {seed.get('js_ratio', '?')}, "
-        f"{len(internal_links)} internal links found). "
-        f"Top {len(top_urls)} by Tranco traffic rank selected for deep crawl: {tier_str}."
+        f"{len(internal_links)} internal links found; domain Tranco rank "
+        f"{rank or 'unranked'}). Representative links selected for deep crawl: {tier_str}."
     )
 
     report = CrawlReport(
@@ -148,8 +140,14 @@ async def _pass2(top_urls: list[str], seed_url: str) -> CrawlReport:
             summary="No follow-up pages selected in pass 1.",
         )
 
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_DEEP_CRAWLS)
+
+    async def _bounded_crawl(url: str) -> dict:
+        async with semaphore:
+            return await _crawl_one_page(url)
+
     page_results = await asyncio.gather(
-        *[_crawl_one_page(u) for u in top_urls], return_exceptions=True
+        *[_bounded_crawl(u) for u in top_urls], return_exceptions=True
     )
 
     successes, js_heavy, bot_blocked_pages = [], [], []

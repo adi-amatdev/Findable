@@ -52,6 +52,12 @@ terminal offline state and produces its bounded fallback report rather than
 retrying indefinitely. Durable restart recovery would require moving this
 registry to Redis or another shared state service.
 
+Completed audit queues and reports expire after one hour, so disconnected
+browser sessions cannot grow the in-process registry indefinitely. The
+resource-intensive tracked path also serialises whole audits; its four agents
+remain concurrent within the active audit, but duplicate browser submissions do
+not multiply crawl and model memory use.
+
 ## Event phases
 
 All 4 agents share a common phase vocabulary. Crawlability has additional sub-agent phases.
