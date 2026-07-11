@@ -6,7 +6,7 @@
 - [cache](cache.md) - URL-hash-keyed Redis store for crawl results, so re-runs never re-fetch and never waste Firecrawl credits.
 - [crawl-fetch](crawl-fetch.md) - Retrieves raw and rendered HTML, robots.txt, sitemap, and llms.txt for the target URL.
 - [extraction](extraction.md) - Parses raw and rendered HTML with no LLM to produce the SiteFacts object that all four agents read.
-- [frontend](frontend.md) - Single-page Renaissance-themed dashboard with anime.js animations, SSE streaming agent columns, cancel/abort support, and report export.
+- [frontend](frontend.md) - Single-page gold-on-black dashboard with a Three.js galaxy background, SSE streaming, cancel/abort support, and an interactive audit report.
 - [mock-stream](mock-stream.md) - Zero-cost development mode that bypasses Firecrawl and agents while preserving the frontend streaming contract.
 - [model-router](model-router.md) - Selects which model and backend for each LLM role, with dual vLLM endpoints, Fireworks Gemma 4 fallback, Ollama fallback, and token logging.
 - [orchestrator](orchestrator.md) - Planned asyncio coordinator for multi-page crawl, extraction, agent fan-out, aggregation, and live status events.
