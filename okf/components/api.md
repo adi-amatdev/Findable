@@ -36,6 +36,10 @@ The FastAPI app is the single entrypoint for external callers. Wired in `app/api
 | `POST` | `/audit/batch` | Run pipeline on up to 10 SiteFacts, one AuditReport each. |
 | `GET`  | `/health` | Liveness. |
 
+## Rate limiting
+
+All routes pass through the [IP-Based Rate Limiter](/components/rate-limiter.md) middleware. Limits are per client IP (default: 5 requests / 12 h). Whitelisted IPs (e.g. `127.0.0.1`) bypass the limiter entirely. Disable with `RATE_LIMIT_ENABLED=false`.
+
 ## Streaming flow (`POST /api/audit/start`)
 
 Before forwarding SiteFacts to agents-api, the API limits the markdown field to

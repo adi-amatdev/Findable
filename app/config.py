@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     # be built and tested without burning any API credits.
     mock_stream: bool = False
 
+    # --- Rate limiting ---
+    rate_limit_enabled: bool = True
+    rate_limit_max_requests: int = 5
+    rate_limit_window_hours: float = 12.0
+    rate_limit_whitelist: str = ""  # comma-separated IPs that bypass limiting
+    rate_limit_cleanup_interval_seconds: int = 600  # periodic cleanup every 10 min
+
     # --- Orchestrator scope ---
     max_deep_pages: int = 4    # follow-up pages that get the full 4-agent pass
     max_shallow_pages: int = 50  # ceiling on the deterministic site crawl
